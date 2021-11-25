@@ -7,15 +7,6 @@ import "gopkg.in/yaml.v2"
 import "os"
 import "strings"
 
-/*
-type configSectionType struct {
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	DBName   string `yaml:"dbname"`
-}
-*/
 type configSectionType map[string]string
 
 type ruleType struct {
