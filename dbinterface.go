@@ -42,40 +42,43 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
-func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]realMatch, []string, error) {
+func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, []string, bool, error) {
 	matchdbre := make([]string, 0, 10)
-	realmatches := make([]realMatch, 0)
+	dbmatches := make([]databaseMatches,0)
 	matcheddbmap := make(map[string]bool)
+	matcheddblist := make([]string, 0)
+	initialmatch := false
 
 	for _, v := range matchconfig {
 		matchdbre = append(matchdbre, v.Database)
-		realmatches = append(realmatches, newRealMatch())
+		dbmatches = append(dbmatches, newDatabaseMatches())
 	}
-	r, err := i.conn.Query(context.Background(), "select x.rownum, d.datname from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by rownum, pg_database_size(datname) desc, datname", matchdbre)
+	r, err := i.conn.Query(context.Background(), "select x.rownum, d.datname, case when d.datname=current_database() then 't'::bool else 'f'::bool end as initial from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by initial desc, pg_database_size(datname) desc, datname", matchdbre)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, false, err
 	}
 	for r.Next() {
 		var rownum int
 		var datname string
-		err := r.Scan(&rownum, &datname)
+		var initial bool
+		err := r.Scan(&rownum, &datname, &initial)
 		if err != nil {
 			r.Close()
-			return nil, nil, err
+			return nil, nil, false, err
 		}
 		// -1 because postgres indexes arrays from 1, while Go counts from 0
-		realmatches[rownum-1].Databases[datname] = true
+		dbmatches[rownum-1][datname] = true
+		if !matcheddbmap[datname] {
+			matcheddblist=append(matcheddblist, datname)
+		}
+		if initial {
+			initialmatch = true
+		}
 		matcheddbmap[datname] = true
 	}
 	r.Close()
 
-	matcheddbarray := make([]string, len(matcheddbmap))
-	idx := 0
-	for k, _ := range matcheddbmap {
-		matcheddbarray[idx] = k
-		idx++
-	}
-	return realmatches, matcheddbarray, nil
+	return dbmatches, matcheddblist, initialmatch, nil
 }
 
 /*

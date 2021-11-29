@@ -36,13 +36,16 @@ type table struct {
 	TableName  string
 }
 
-type realMatch struct {
-	Databases map[string]bool
-	Tables    map[table]bool
+type databaseMatches map[string]bool
+
+func newDatabaseMatches() map[string]bool {
+	return make(map[string]bool, 0)
 }
 
-func newRealMatch() realMatch {
-	return realMatch{Databases: make(map[string]bool, 0), Tables: make(map[table]bool, 0)}
+type tableMatches map[table]bool
+
+func newTableMatches() map[table]bool {
+	return make(map[table]bool, 0)
 }
 
 func buildDSN(conf configSectionType) string {
@@ -100,23 +103,24 @@ func main() {
 			fmt.Println(val)
 		}
 	*/
-	realmatches, dbnames, err := i.GetDBMatches(x.Match)
+	dbmatches, matcheddbnames, initialdbmatch, err := i.GetDBMatches(x.Match)
 	if err != nil {
 		i.Close()
 		panic(err)
 	}
-	for _, val := range realmatches {
+	for _, val := range dbmatches {
 		fmt.Println(val)
 	}
-	fmt.Println(dbnames)
+	fmt.Println(matcheddbnames)
 	i.Close()
 
-	for _, val := range dbnames {
+	for _, val := range matcheddbnames {
 		perdbconfig := x.Config
 		perdbconfig["dbname"] = val
 		i := NewDBInterface(buildDSN(perdbconfig))
 		fmt.Printf("Connected to %s\n", val)
 		i.Close()
 	}
-	_ = realmatches
+	_ = dbmatches
+	_ = initialdbmatch
 }
