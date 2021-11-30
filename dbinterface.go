@@ -1,6 +1,7 @@
 package main
 
 import "context"
+import "encoding/json"
 import "github.com/jackc/pgx/v4"
 
 var bgctx = context.Background()
@@ -90,6 +91,160 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 	r.Close()
 
 	return dbmatches, matcheddblist, initialmatch, nil
+}
+
+func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) error {
+	type MatchRule struct {
+		Operator  string `json:"operator"`
+		Threshold uint64 `json:"threshold"`
+	}
+
+	type MatchSection struct {
+		SchemaRE string      `json:"schemare"`
+		TableRE  string      `json:"tablere"`
+		Rules    []MatchRule `json:"rules"`
+	}
+
+	rulesfordb := make([]MatchSection, 0, cap(matchconfig))
+	for idx, val := range matchconfig {
+		rulesfordb = append(rulesfordb, MatchSection{SchemaRE: val.Schema, TableRE: val.Table, Rules: make([]MatchRule, 0, cap(rulesetconfig[val.Ruleset]))})
+		for _, val := range rulesetconfig[val.Ruleset] {
+			rulesfordb[idx].Rules = append(rulesfordb[idx].Rules, MatchRule{Operator: val.Condition, Threshold: val.Value})
+		}
+	}
+	buf, err := json.Marshal(rulesfordb)
+	if err != nil {
+		return err
+	}
+	jsonfordb := string(buf)
+
+	/*
+		Here is where the black magic happens. We've coerced the configured rules
+		into a json-encoded data structure. We pass this to the database and this
+		query pulls it apart and joins against pg_class.
+
+		The result is all matching tables in the database, first with the match
+		section they matched, and then the rule they matched. Note that if a table
+		matches a section, but does not match any rules within it, it will still not
+		match subsequent sections.
+	*/
+	r, err := i.conn.Query(bgctx, `with jsonin as
+  (select $1::jsonb as jsonin),
+     tablesub as
+  (select row_number() over () as tablematchnum,
+                            schemare,
+                            tablere
+   from
+     (select jsonb_array_elements(jsonin)->>'schemare' as schemare,
+                                            jsonb_array_elements(jsonin)->>'tablere' as tablere
+      from jsonin) tablesub1),
+     rulessub as
+  (select tablematchnum,
+          row_number() over (partition by tablematchnum) as rulenum,
+   operator,
+                            threshold
+   from
+     (select row_number() over () as tablematchnum,
+                               jsonb_array_elements(rules)->>'operator' as
+      operator,
+                                                             (jsonb_array_elements(rules)->>'threshold')::bigint as threshold
+      from
+        (select jsonb_array_elements(jsonin)->'rules' as rules
+         from jsonin) rulessub1) rulessub2),
+     tablefiltersub as
+  (select tablematchnum,
+          relnamespace,
+          relname,
+          reltuples
+   from
+     (select ts.tablematchnum,
+             c.relnamespace::regnamespace::text as relnamespace,
+             c.relname,
+             min(ts.tablematchnum) over (partition by c.relnamespace,
+                                                      c.relname) as mintablematchnum,
+                                        c.reltuples
+      from pg_class c
+      join tablesub ts on c.relnamespace::regnamespace::text ~ ts.schemare
+      and c.relname ~ ts.tablere
+      where c.relpersistence='p'
+        and c.relkind in ('r',
+                          'm',
+                          'p')) tablefiltersub1
+   where tablematchnum = mintablematchnum),
+     rulesfiltersub as
+  (select tablematchnum,
+          rulenum,
+          relnamespace,
+          relname
+   from
+     (select tfs.tablematchnum,
+             rs.rulenum,
+             tfs.relnamespace,
+             tfs.relname,
+             min(rulenum) over (partition by tfs.relnamespace,
+                                             tfs.relname,
+                                             tfs.tablematchnum) as minrulenum
+      from tablefiltersub tfs
+      join rulessub rs on tfs.tablematchnum = rs.tablematchnum
+      and case
+              when rs.operator = 'ge'
+                   and tfs.reltuples >= rs.threshold then 't'::bool
+              when rs.operator = 'lt'
+                   and tfs.reltuples < rs.threshold then 't'::bool
+              else 'f'::bool
+          end) rulesfiltersub1
+   where rulenum = minrulenum)
+select tablematchnum,
+       rulenum,
+       relnamespace,
+       relname,
+       format('%I.%I', relnamespace, relname) as quotedfull
+from rulesfiltersub
+order by tablematchnum,
+         rulenum,
+         pg_table_size(format('%I.%I', relnamespace, relname)::regclass) desc`, jsonfordb)
+	if err != nil {
+		return err
+	}
+
+	tablematches := make([][][]table,0)
+	lastsection := -1
+	lastrule := -1
+	for r.Next() {
+		var tablematchnum int
+		var rulenum int
+		var relnamespace string
+		var relname string
+		var quotedfull string
+
+		err := r.Scan(&tablematchnum, &rulenum, &relnamespace, &relname, &quotedfull)
+		if err != nil {
+			r.Close()
+			return err
+		}
+		//fmt.Printf("Matched table %s with section %d, rule %d\n", quotedfull, tablematchnum, rulenum)
+
+		if rulenum-1 < lastrule {
+			lastrule=-1
+		}
+
+		if lastsection < tablematchnum-1 {
+			for idx:=lastsection; idx<tablematchnum-1; idx++ {
+				tablematches=append(tablematches,make([][]table,0))
+			}
+		}
+		if lastrule < rulenum-1 {
+			for idx:=lastrule; idx<rulenum-1; idx++ {
+				tablematches[tablematchnum-1]=append(tablematches[tablematchnum-1],make([]table,0))
+			}
+		}
+		tablematches[tablematchnum-1][rulenum-1]=append(tablematches[tablematchnum-1][rulenum-1],table{SchemaName: relnamespace, TableName: relname, QuotedFullName: quotedfull})
+		lastsection=tablematchnum-1
+		lastrule=rulenum-1
+	}
+
+	_=tablematches
+	return nil
 }
 
 /*
