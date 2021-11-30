@@ -105,6 +105,12 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 		Rules    []MatchRule `json:"rules"`
 	}
 
+	// Initialize structure to hold results with capacities from input values
+	tablematches := make([][][]table, cap(matchconfig))
+	for idx, _ := range matchconfig {
+		tablematches[idx] = make([][]table, cap(rulesetconfig[matchconfig[idx].Ruleset]))
+	}
+
 	rulesfordb := make([]MatchSection, 0, cap(matchconfig))
 	for idx, val := range matchconfig {
 		rulesfordb = append(rulesfordb, MatchSection{SchemaRE: val.Schema, TableRE: val.Table, Rules: make([]MatchRule, 0, cap(rulesetconfig[val.Ruleset]))})
@@ -207,9 +213,6 @@ order by tablematchnum,
 		return err
 	}
 
-	tablematches := make([][][]table,0)
-	lastsection := -1
-	lastrule := -1
 	for r.Next() {
 		var tablematchnum int
 		var rulenum int
@@ -224,26 +227,10 @@ order by tablematchnum,
 		}
 		//fmt.Printf("Matched table %s with section %d, rule %d\n", quotedfull, tablematchnum, rulenum)
 
-		if rulenum-1 < lastrule {
-			lastrule=-1
-		}
-
-		if lastsection < tablematchnum-1 {
-			for idx:=lastsection; idx<tablematchnum-1; idx++ {
-				tablematches=append(tablematches,make([][]table,0))
-			}
-		}
-		if lastrule < rulenum-1 {
-			for idx:=lastrule; idx<rulenum-1; idx++ {
-				tablematches[tablematchnum-1]=append(tablematches[tablematchnum-1],make([]table,0))
-			}
-		}
-		tablematches[tablematchnum-1][rulenum-1]=append(tablematches[tablematchnum-1][rulenum-1],table{SchemaName: relnamespace, TableName: relname, QuotedFullName: quotedfull})
-		lastsection=tablematchnum-1
-		lastrule=rulenum-1
+		tablematches[tablematchnum-1][rulenum-1] = append(tablematches[tablematchnum-1][rulenum-1], table{SchemaName: relnamespace, TableName: relname, QuotedFullName: quotedfull})
 	}
 
-	_=tablematches
+	_ = tablematches
 	return nil
 }
 
