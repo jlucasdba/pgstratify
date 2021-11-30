@@ -93,7 +93,7 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 	return dbmatches, matcheddblist, initialmatch, nil
 }
 
-func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) error {
+func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) ([][][]table, error) {
 	type MatchRule struct {
 		Operator  string `json:"operator"`
 		Threshold uint64 `json:"threshold"`
@@ -120,7 +120,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	}
 	buf, err := json.Marshal(rulesfordb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	jsonfordb := string(buf)
 
@@ -210,7 +210,7 @@ order by tablematchnum,
          rulenum,
          pg_table_size(format('%I.%I', relnamespace, relname)::regclass) desc`, jsonfordb)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for r.Next() {
@@ -223,15 +223,14 @@ order by tablematchnum,
 		err := r.Scan(&tablematchnum, &rulenum, &relnamespace, &relname, &quotedfull)
 		if err != nil {
 			r.Close()
-			return err
+			return nil, err
 		}
 		//fmt.Printf("Matched table %s with section %d, rule %d\n", quotedfull, tablematchnum, rulenum)
 
 		tablematches[tablematchnum-1][rulenum-1] = append(tablematches[tablematchnum-1][rulenum-1], table{SchemaName: relnamespace, TableName: relname, QuotedFullName: quotedfull})
 	}
 
-	_ = tablematches
-	return nil
+	return tablematches, nil
 }
 
 /*
