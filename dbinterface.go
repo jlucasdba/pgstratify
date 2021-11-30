@@ -3,6 +3,9 @@ package main
 import "context"
 import "github.com/jackc/pgx/v4"
 
+var bgctx = context.Background()
+
+// Struct wrapping a database connection.
 type DBInterface struct {
 	dsn  string
 	conn *pgx.Conn
@@ -11,7 +14,7 @@ type DBInterface struct {
 func NewDBInterface(dsn string) DBInterface {
 	i := DBInterface{}
 	i.dsn = dsn
-	conn, err := pgx.Connect(context.Background(), dsn)
+	conn, err := pgx.Connect(bgctx, dsn)
 	if err != nil {
 		panic(err)
 	}
@@ -20,12 +23,12 @@ func NewDBInterface(dsn string) DBInterface {
 }
 
 func (i *DBInterface) Close() {
-	i.conn.Close(context.Background())
+	i.conn.Close(bgctx)
 }
 
 func (i *DBInterface) ListDBs() []string {
 	datnames := make([]string, 0)
-	r, err := i.conn.Query(context.Background(), "select datname from pg_database where datallowconn = 't'")
+	r, err := i.conn.Query(bgctx, "select datname from pg_database where datallowconn = 't'")
 	if err != nil {
 		panic(err)
 	}
@@ -53,7 +56,7 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 		matchdbre = append(matchdbre, v.Database)
 		dbmatches = append(dbmatches, newDatabaseMatches())
 	}
-	r, err := i.conn.Query(context.Background(), "select x.rownum, d.datname, case when d.datname=current_database() then 't'::bool else 'f'::bool end as initial from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by initial desc, pg_database_size(datname) desc, datname", matchdbre)
+	r, err := i.conn.Query(bgctx, "select x.rownum, d.datname, case when d.datname=current_database() then 't'::bool else 'f'::bool end as initial from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by initial desc, pg_database_size(datname) desc, datname", matchdbre)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -86,7 +89,7 @@ type Table
 
 func (t *Table) GetOptions() TableOptions {
 	datnames:=make([]string,0)
-	r,err:=i.conn.Query(context.Background(),"select relnamespace::regnamespace::text, relname, reloptions[1] as reloptname, reloptions[2] as reloptsetting from (select relnamespace,relname,regexp_split_to_array(unnest(reloptions),'=') as reloptions from pg_class where oid=$1) x",)
+	r,err:=i.conn.Query(bgctx,"select relnamespace::regnamespace::text, relname, reloptions[1] as reloptname, reloptions[2] as reloptsetting from (select relnamespace,relname,regexp_split_to_array(unnest(reloptions),'=') as reloptions from pg_class where oid=$1) x",)
 	if err != nil {
 		panic(err)
 	}
