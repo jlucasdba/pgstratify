@@ -47,7 +47,7 @@ func (i *DBInterface) ListDBs() []string {
 
 func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, []string, bool, error) {
 	matchdbre := make([]string, 0, 10)
-	dbmatches := make([]databaseMatches,0)
+	dbmatches := make([]databaseMatches, 0)
 	matcheddbmap := make(map[string]bool)
 	matcheddblist := make([]string, 0)
 	initialmatch := false
@@ -72,7 +72,7 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 		// -1 because postgres indexes arrays from 1, while Go counts from 0
 		dbmatches[rownum-1][datname] = true
 		if !matcheddbmap[datname] {
-			matcheddblist=append(matcheddblist, datname)
+			matcheddblist = append(matcheddblist, datname)
 		}
 		if initial {
 			initialmatch = true
