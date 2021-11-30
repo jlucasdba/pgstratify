@@ -100,6 +100,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	}
 
 	type MatchSection struct {
+		DBRE     string      `json:"dbre"`
 		SchemaRE string      `json:"schemare"`
 		TableRE  string      `json:"tablere"`
 		Rules    []MatchRule `json:"rules"`
@@ -113,7 +114,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 
 	rulesfordb := make([]MatchSection, 0, cap(matchconfig))
 	for idx, val := range matchconfig {
-		rulesfordb = append(rulesfordb, MatchSection{SchemaRE: val.Schema, TableRE: val.Table, Rules: make([]MatchRule, 0, cap(rulesetconfig[val.Ruleset]))})
+		rulesfordb = append(rulesfordb, MatchSection{DBRE: val.Database, SchemaRE: val.Schema, TableRE: val.Table, Rules: make([]MatchRule, 0, cap(rulesetconfig[val.Ruleset]))})
 		for _, val := range rulesetconfig[val.Ruleset] {
 			rulesfordb[idx].Rules = append(rulesfordb[idx].Rules, MatchRule{Operator: val.Condition, Threshold: val.Value})
 		}
@@ -138,11 +139,13 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
   (select $1::jsonb as jsonin),
      tablesub as
   (select row_number() over () as tablematchnum,
+                            dbre,
                             schemare,
                             tablere
    from
-     (select jsonb_array_elements(jsonin)->>'schemare' as schemare,
-                                            jsonb_array_elements(jsonin)->>'tablere' as tablere
+     (select jsonb_array_elements(jsonin)->>'dbre' as dbre,
+                                            jsonb_array_elements(jsonin)->>'schemare' as schemare,
+                                                                           jsonb_array_elements(jsonin)->>'tablere' as tablere
       from jsonin) tablesub1),
      rulessub as
   (select tablematchnum,
@@ -172,7 +175,8 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
       from pg_class c
       join tablesub ts on c.relnamespace::regnamespace::text ~ ts.schemare
       and c.relname ~ ts.tablere
-      where c.relpersistence='p'
+      where current_database() ~ ts.dbre
+        and c.relpersistence='p'
         and c.relkind in ('r',
                           'm',
                           'p')) tablefiltersub1
