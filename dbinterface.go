@@ -45,6 +45,14 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
+/*
+Takes a slice of matchType representing the database match rules from the config file in order.
+Returns four items: First, a slice of databaseMatches (map of database names), with each element
+corresponding to one of the match rules from the input slice. Second, an aggregated list of matched
+database names, with the initial connection database first (if applicable) and otherwise sorted
+descending by database size. Last, a bool representing whether the initial database connection
+was found in the matches. And lastly an error.
+*/
 func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, []string, bool, error) {
 	matchdbre := make([]string, 0, 10)
 	dbmatches := make([]databaseMatches, 0)
