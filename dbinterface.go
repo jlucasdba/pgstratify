@@ -47,28 +47,18 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
-/*
-Takes a slice of matchType representing the database match rules from the config file in order.
-Returns four items: First, a slice of databaseMatches (map of database names), with each element
-corresponding to one of the match rules from the input slice. Second, an aggregated list of matched
-database names, with the initial connection database first (if applicable) and otherwise sorted
-descending by database size. Last, a bool representing whether the initial database connection
-was found in the matches. And lastly an error.
-*/
-func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, []string, bool, error) {
+func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]string, bool, error) {
 	matchdbre := make([]string, 0, 10)
-	dbmatches := make([]databaseMatches, 0)
 	matcheddbmap := make(map[string]bool)
 	matcheddblist := make([]string, 0)
 	initialmatch := false
 
 	for _, v := range matchconfig {
 		matchdbre = append(matchdbre, v.Database)
-		dbmatches = append(dbmatches, newDatabaseMatches())
 	}
 	r, err := i.conn.Query(bgctx, "select x.rownum, d.datname, case when d.datname=current_database() then 't'::bool else 'f'::bool end as initial from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by initial desc, pg_database_size(datname) desc, datname", matchdbre)
 	if err != nil {
-		return nil, nil, false, err
+		return nil, false, err
 	}
 	for r.Next() {
 		var rownum int
@@ -77,10 +67,8 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 		err := r.Scan(&rownum, &datname, &initial)
 		if err != nil {
 			r.Close()
-			return nil, nil, false, err
+			return nil, false, err
 		}
-		// -1 because postgres indexes arrays from 1, while Go counts from 0
-		dbmatches[rownum-1][datname] = true
 		if !matcheddbmap[datname] {
 			matcheddblist = append(matcheddblist, datname)
 		}
@@ -89,9 +77,11 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 		}
 		matcheddbmap[datname] = true
 	}
-	r.Close()
+	if r.Err() != nil {
+		return nil, false, err
+	}
 
-	return dbmatches, matcheddblist, initialmatch, nil
+	return matcheddblist, initialmatch, nil
 }
 
 func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) ([]tableMatch, error) {
