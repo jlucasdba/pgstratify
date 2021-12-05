@@ -44,8 +44,8 @@ func newDatabaseMatches() map[string]bool {
 }
 
 type tableMatchOption struct {
-	OldSetting string
-	NewSetting string
+	OldSetting *string
+	NewSetting *string
 }
 
 type tableMatch struct {
@@ -139,7 +139,13 @@ func main() {
 		for _, val := range tablematches {
 			fmt.Printf("Table %s:\n", val.QuotedFullName)
 			for key2, val2 := range val.Options {
-				fmt.Printf("  Set %s to %s (previous setting %s)\n", key2, val2.NewSetting, val2.OldSetting)
+				if val2.NewSetting == nil {
+					fmt.Printf("  Reset %s\n", key2)
+				} else if val2.OldSetting == nil {
+					fmt.Printf("  Set %s to %s (previously unset)\n", key2, *val2.NewSetting)
+				} else {
+					fmt.Printf("  Set %s to %s (previous setting %s)\n", key2, *val2.NewSetting, *val2.OldSetting)
+				}
 			}
 		}
 

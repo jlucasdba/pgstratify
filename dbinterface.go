@@ -106,8 +106,8 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 
 	// define struct for parsing json from db
 	type Option struct {
-		OldSetting string `json:"oldsetting"`
-		NewSetting string `json:"newsetting"`
+		OldSetting *string `json:"oldsetting"`
+		NewSetting *string `json:"newsetting"`
 	}
 
 	// Initialize structure to hold results with capacities from input values
