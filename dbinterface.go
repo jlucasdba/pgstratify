@@ -43,7 +43,9 @@ func (i *DBInterface) ListDBs() []string {
 		}
 		datnames = append(datnames, s)
 	}
-	r.Close()
+	if r.Err() != nil {
+		panic(err)
+	}
 	return datnames
 }
 
