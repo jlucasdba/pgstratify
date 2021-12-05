@@ -42,10 +42,15 @@ func newDatabaseMatches() map[string]bool {
 	return make(map[string]bool, 0)
 }
 
-type tableMatches map[table]bool
+type tableMatchOption struct {
+	OldSetting string
+	NewSetting string
+}
 
-func newTableMatches() map[table]bool {
-	return make(map[table]bool, 0)
+type tableMatch struct {
+	Reloid         int
+	QuotedFullName string
+	Options        map[string]tableMatchOption
 }
 
 func buildDSN(conf configSectionType) string {

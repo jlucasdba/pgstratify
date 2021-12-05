@@ -3,6 +3,7 @@ package main
 import "context"
 import "encoding/json"
 import "github.com/jackc/pgx/v4"
+import "github.com/jlucasdba/pgvacman/queries"
 
 var bgctx = context.Background()
 
@@ -93,145 +94,103 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]databaseMatches, 
 	return dbmatches, matcheddblist, initialmatch, nil
 }
 
-func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) ([][][]table, error) {
-	type MatchRule struct {
-		Operator  string `json:"operator"`
-		Threshold uint64 `json:"threshold"`
+func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) ([]tableMatch, error) {
+	// define some structs for building json
+	type Rule struct {
+		Condition string            `json:"condition"`
+		Value     uint64            `json:"value"`
+		Set       map[string]string `json:"set"`
+		Reset     []string          `json:"reset"`
 	}
 
+	type Ruleset []Rule
+
 	type MatchSection struct {
-		DBRE     string      `json:"dbre"`
-		SchemaRE string      `json:"schemare"`
-		TableRE  string      `json:"tablere"`
-		Rules    []MatchRule `json:"rules"`
+		DBRE     string `json:"dbre"`
+		SchemaRE string `json:"schemare"`
+		TableRE  string `json:"tablere"`
+		Ruleset  string `json:"ruleset"`
+	}
+
+	// define struct for parsing json from db
+	type Option struct {
+		OldSetting string `json:"oldsetting"`
+		NewSetting string `json:"newsetting"`
 	}
 
 	// Initialize structure to hold results with capacities from input values
-	tablematches := make([][][]table, cap(matchconfig))
-	for idx, _ := range matchconfig {
-		tablematches[idx] = make([][]table, cap(rulesetconfig[matchconfig[idx].Ruleset]))
-	}
+	tablematches := make([]tableMatch, 0)
 
-	rulesfordb := make([]MatchSection, 0, cap(matchconfig))
-	for idx, val := range matchconfig {
-		rulesfordb = append(rulesfordb, MatchSection{DBRE: val.Database, SchemaRE: val.Schema, TableRE: val.Table, Rules: make([]MatchRule, 0, cap(rulesetconfig[val.Ruleset]))})
-		for _, val := range rulesetconfig[val.Ruleset] {
-			rulesfordb[idx].Rules = append(rulesfordb[idx].Rules, MatchRule{Operator: val.Condition, Threshold: val.Value})
+	// Build data structures to be dumped to json for query input
+	matchsectionsfordb := make([]MatchSection, 0, cap(matchconfig))
+	for _, val := range matchconfig {
+		matchsectionsfordb = append(matchsectionsfordb, MatchSection{DBRE: val.Database, SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
+	}
+	rulesetsfordb := make(map[string]Ruleset, len(rulesetconfig))
+	for key, val := range rulesetconfig {
+		rulesetsfordb[key] = make(Ruleset, 0, cap(val))
+		for idx2, val2 := range val {
+			rulesetsfordb[key] = append(rulesetsfordb[key], Rule{Condition: val2.Condition, Value: val2.Value, Set: make(map[string]string, len(val2.Set)), Reset: make([]string, cap(val2.Reset))})
+			for key3, val3 := range val2.Set {
+				rulesetsfordb[key][idx2].Set[key3] = val3
+			}
+			for _, val3 := range val2.Reset {
+				rulesetsfordb[key][idx2].Reset = append(rulesetsfordb[key][idx2].Reset, val3)
+			}
 		}
 	}
-	buf, err := json.Marshal(rulesfordb)
+	buf, err := json.Marshal(matchsectionsfordb)
 	if err != nil {
 		return nil, err
 	}
-	jsonfordb := string(buf)
+	matchsectionsfordbjson := string(buf)
+	buf, err = json.Marshal(rulesetsfordb)
+	if err != nil {
+		return nil, err
+	}
+	rulesetsfordbjson := string(buf)
 
 	/*
 		Here is where the black magic happens. We've coerced the configured rules
-		into a json-encoded data structure. We pass this to the database and this
+		into json-encoded data structures. We pass these to the database and this
 		query pulls it apart and joins against pg_class.
 
-		The result is all matching tables in the database, first with the match
-		section they matched, and then the rule they matched. Note that if a table
+		The result is all matching tables in the database that require at least one
+		option update, with all the effective new settings. Note that if a table
 		matches a section, but does not match any rules within it, it will still not
 		match subsequent sections.
 	*/
-	r, err := i.conn.Query(bgctx, `with jsonin as
-  (select $1::jsonb as jsonin),
-     tablesub as
-  (select row_number() over () as tablematchnum,
-                            dbre,
-                            schemare,
-                            tablere
-   from
-     (select jsonb_array_elements(jsonin)->>'dbre' as dbre,
-                                            jsonb_array_elements(jsonin)->>'schemare' as schemare,
-                                                                           jsonb_array_elements(jsonin)->>'tablere' as tablere
-      from jsonin) tablesub1),
-     rulessub as
-  (select tablematchnum,
-          row_number() over (partition by tablematchnum) as rulenum,
-   operator,
-                            threshold
-   from
-     (select row_number() over () as tablematchnum,
-                               jsonb_array_elements(rules)->>'operator' as
-      operator,
-                                                             (jsonb_array_elements(rules)->>'threshold')::bigint as threshold
-      from
-        (select jsonb_array_elements(jsonin)->'rules' as rules
-         from jsonin) rulessub1) rulessub2),
-     tablefiltersub as
-  (select tablematchnum,
-          relnamespace,
-          relname,
-          reltuples
-   from
-     (select ts.tablematchnum,
-             c.relnamespace::regnamespace::text as relnamespace,
-             c.relname,
-             min(ts.tablematchnum) over (partition by c.relnamespace,
-                                                      c.relname) as mintablematchnum,
-                                        c.reltuples
-      from pg_class c
-      join tablesub ts on c.relnamespace::regnamespace::text ~ ts.schemare
-      and c.relname ~ ts.tablere
-      where current_database() ~ ts.dbre
-        and c.relpersistence='p'
-        and c.relkind in ('r',
-                          'm',
-                          'p')) tablefiltersub1
-   where tablematchnum = mintablematchnum),
-     rulesfiltersub as
-  (select tablematchnum,
-          rulenum,
-          relnamespace,
-          relname
-   from
-     (select tfs.tablematchnum,
-             rs.rulenum,
-             tfs.relnamespace,
-             tfs.relname,
-             min(rulenum) over (partition by tfs.relnamespace,
-                                             tfs.relname,
-                                             tfs.tablematchnum) as minrulenum
-      from tablefiltersub tfs
-      join rulessub rs on tfs.tablematchnum = rs.tablematchnum
-      and case
-              when rs.operator = 'ge'
-                   and tfs.reltuples >= rs.threshold then 't'::bool
-              when rs.operator = 'lt'
-                   and tfs.reltuples < rs.threshold then 't'::bool
-              else 'f'::bool
-          end) rulesfiltersub1
-   where rulenum = minrulenum)
-select tablematchnum,
-       rulenum,
-       relnamespace,
-       relname,
-       format('%I.%I', relnamespace, relname) as quotedfull
-from rulesfiltersub
-order by tablematchnum,
-         rulenum,
-         pg_table_size(format('%I.%I', relnamespace, relname)::regclass) desc`, jsonfordb)
+	r, err := i.conn.Query(bgctx, queries.RuleMatchQuery, matchsectionsfordbjson, rulesetsfordbjson)
 	if err != nil {
 		return nil, err
 	}
 
 	for r.Next() {
-		var tablematchnum int
-		var rulenum int
-		var relnamespace string
-		var relname string
-		var quotedfull string
+		var reloid int
+		var quotedfullname string
+		var jsonfromdb string
 
-		err := r.Scan(&tablematchnum, &rulenum, &relnamespace, &relname, &quotedfull)
+		err := r.Scan(&reloid, &quotedfullname, &jsonfromdb)
 		if err != nil {
 			r.Close()
 			return nil, err
 		}
 		//fmt.Printf("Matched table %s with section %d, rule %d\n", quotedfull, tablematchnum, rulenum)
 
-		tablematches[tablematchnum-1][rulenum-1] = append(tablematches[tablematchnum-1][rulenum-1], table{SchemaName: relnamespace, TableName: relname, QuotedFullName: quotedfull})
+		options := make(map[string]Option)
+		err = json.Unmarshal([]byte(jsonfromdb), &options)
+		if err != nil {
+			r.Close()
+			return nil, err
+		}
+		tmoptions := make(map[string]tableMatchOption)
+		for key, val := range options {
+			tmoptions[key] = tableMatchOption(val)
+		}
+		tablematches = append(tablematches, tableMatch{Reloid: reloid, QuotedFullName: quotedfullname, Options: tmoptions})
+	}
+	if r.Err() != nil {
+		return nil, err
 	}
 
 	return tablematches, nil
