@@ -32,8 +32,9 @@ type configFileType struct {
 }
 
 type table struct {
-	SchemaName string
-	TableName  string
+	SchemaName     string
+	TableName      string
+	QuotedFullName string
 }
 
 type databaseMatches map[string]bool
@@ -101,31 +102,44 @@ func main() {
 		}
 		defer conn.Close(context.Background())
 	*/
-	i := NewDBInterface(buildDSN(x.Config))
+	initialconn := NewDBInterface(buildDSN(x.Config))
 	/*
 		dbs := i.ListDBs()
 		for _, val := range dbs {
 			fmt.Println(val)
 		}
 	*/
-	dbmatches, matcheddbnames, initialdbmatch, err := i.GetDBMatches(x.Match)
+	matcheddbnames, initialdbmatch, err := initialconn.GetDBMatches(x.Match)
 	if err != nil {
-		i.Close()
+		initialconn.Close()
 		panic(err)
 	}
-	for _, val := range dbmatches {
-		fmt.Println(val)
-	}
 	fmt.Println(matcheddbnames)
-	i.Close()
-
-	for _, val := range matcheddbnames {
-		perdbconfig := x.Config
-		perdbconfig["dbname"] = val
-		i := NewDBInterface(buildDSN(perdbconfig))
-		fmt.Printf("Connected to %s\n", val)
-		i.Close()
+	// close the initial connection unless we can reuse it
+	if !initialdbmatch {
+		initialconn.Close()
 	}
-	_ = dbmatches
-	_ = initialdbmatch
+
+	for idx, val := range matcheddbnames {
+		var currconn DBInterface
+		if idx == 0 && initialdbmatch {
+			currconn = initialconn
+			fmt.Printf("Reusing connection to %s\n", val)
+		} else {
+			perdbconfig := x.Config
+			perdbconfig["dbname"] = val
+			currconn = NewDBInterface(buildDSN(perdbconfig))
+			fmt.Printf("Connected to %s\n", val)
+		}
+		tablematches, err := currconn.GetTableMatches(val, x.Match, x.Ruleset)
+		if err != nil {
+			panic(err)
+		}
+
+		for idx, val := range tablematches {
+			fmt.Println(idx,val)
+		}
+
+		currconn.Close()
+	}
 }
