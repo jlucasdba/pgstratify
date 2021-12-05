@@ -136,8 +136,11 @@ func main() {
 			panic(err)
 		}
 
-		for idx, val := range tablematches {
-			fmt.Println(idx,val)
+		for _, val := range tablematches {
+			fmt.Printf("Table %s:\n", val.QuotedFullName)
+			for key2, val2 := range val.Options {
+				fmt.Printf("  Set %s to %s (previous setting %s)\n", key2, val2.NewSetting, val2.OldSetting)
+			}
 		}
 
 		currconn.Close()
