@@ -5,6 +5,7 @@ package main
 import "fmt"
 import "gopkg.in/yaml.v2"
 import "os"
+import "sort"
 import "strings"
 
 type configSectionType map[string]string
@@ -138,13 +139,18 @@ func main() {
 
 		for _, val := range tablematches {
 			fmt.Printf("Table %s:\n", val.QuotedFullName)
-			for key2, val2 := range val.Options {
-				if val2.NewSetting == nil {
-					fmt.Printf("  Reset %s\n", key2)
-				} else if val2.OldSetting == nil {
-					fmt.Printf("  Set %s to %s (previously unset)\n", key2, *val2.NewSetting)
+			sortedkeys := make([]string, 0, len(val.Options))
+			for key2, _ := range val.Options {
+				sortedkeys = append(sortedkeys, key2)
+			}
+			sort.Strings(sortedkeys)
+			for _, val2 := range sortedkeys {
+				if val.Options[val2].NewSetting == nil {
+					fmt.Printf("  Reset %s\n", val2)
+				} else if val.Options[val2].OldSetting == nil {
+					fmt.Printf("  Set %s to %s (previously unset)\n", val2, *val.Options[val2].NewSetting)
 				} else {
-					fmt.Printf("  Set %s to %s (previous setting %s)\n", key2, *val2.NewSetting, *val2.OldSetting)
+					fmt.Printf("  Set %s to %s (previous setting %s)\n", val2, *val.Options[val2].NewSetting, *val.Options[val2].OldSetting)
 				}
 			}
 		}
