@@ -13,6 +13,20 @@ type DBInterface struct {
 	conn *pgx.Conn
 }
 
+// Error indicating failure to acquire a lock
+type AcquireLockError struct {
+	Msg string
+	Err error
+}
+
+func (e AcquireLockError) Error() string {
+	return e.Msg
+}
+
+func (e AcquireLockError) Unwrap() error {
+	return e.Err
+}
+
 func NewDBInterface(dsn string) DBInterface {
 	i := DBInterface{}
 	i.dsn = dsn
