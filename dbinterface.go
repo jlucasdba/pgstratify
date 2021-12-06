@@ -9,6 +9,7 @@ import "github.com/jackc/pgerrcode"
 import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
 import "regexp"
+import "sort"
 
 var bgctx = context.Background()
 
@@ -253,6 +254,42 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch) error {
 			return err
 		}
 	}
+
+	// Now we cycle through the table options and try to set each one
+	sortedkeys := make([]string, 0, len(match.Options))
+	for key, _ := range match.Options {
+		sortedkeys = append(sortedkeys, key)
+	}
+	sort.Strings(sortedkeys)
+	for _, val := range sortedkeys {
+		var altersql string
+		if match.Options[val].NewSetting == nil {
+			fmt.Printf("  Reset %s\n", val)
+			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, val)
+		} else if match.Options[val].OldSetting == nil {
+			fmt.Printf("  Set %s to %s (previously unset)\n", val, *match.Options[val].NewSetting)
+			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, val, *match.Options[val].NewSetting)
+		} else {
+			fmt.Printf("  Set %s to %s (previous setting %s)\n", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
+			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, val, *match.Options[val].NewSetting)
+		}
+		tx2,err := tx.Begin(bgctx)
+		if err != nil {
+			panic(err)
+		}
+		r,err := tx2.Query(bgctx,altersql)
+		for r.Next() {}
+		if r.Err() != nil {
+			err:=r.Err()
+			tx2.Rollback(bgctx)
+			fmt.Println("Unable to set storage paramter %s: %v",val,err)
+		}
+		err=tx2.Commit(bgctx)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	err = tx.Commit(bgctx)
 	if err != nil {
 		tx.Rollback(bgctx)
