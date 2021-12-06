@@ -2,8 +2,13 @@ package main
 
 import "context"
 import "encoding/json"
+import "errors"
+import "fmt"
+import "github.com/jackc/pgconn"
+import "github.com/jackc/pgerrcode"
 import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
+import "regexp"
 
 var bgctx = context.Background()
 
@@ -196,10 +201,64 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 		tablematches = append(tablematches, tableMatch{Reloid: reloid, QuotedFullName: quotedfullname, Options: tmoptions})
 	}
 	if r.Err() != nil {
-		return nil, err
+		return nil, r.Err()
 	}
 
 	return tablematches, nil
+}
+
+func (i *DBInterface) UpdateTableOptions(match tableMatch) error {
+	// Nearly all storage parameters don't actually require access
+	// exclusive lock - if we are only setting such parameters, we
+	// can use a less restrictive share update exclusive lock
+	// We evaluate whether we only have such parameters with a regexp
+	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
+	usesharelock := true
+	for key, _ := range match.Options {
+		if !sharelockre.MatchString(key) {
+			usesharelock = false
+		}
+	}
+
+	var locksql string
+	if usesharelock {
+		locksql = fmt.Sprintf("lock table %s in share update exclusive mode nowait", match.QuotedFullName)
+	} else {
+		locksql = fmt.Sprintf("lock table %s in access exclusive mode nowait", match.QuotedFullName)
+	}
+
+	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{pgx.ReadCommitted, pgx.ReadWrite, pgx.NotDeferrable})
+	if err != nil {
+		return err
+	}
+	r, err := tx.Query(bgctx, locksql)
+	if err != nil {
+		tx.Rollback(bgctx)
+		var pgerr *pgconn.PgError
+		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
+			return AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+		} else {
+			return err
+		}
+	}
+	for r.Next() {
+	}
+	if r.Err() != nil {
+		err := r.Err()
+		tx.Rollback(bgctx)
+		var pgerr *pgconn.PgError
+		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
+			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+		} else {
+			return err
+		}
+	}
+	err = tx.Commit(bgctx)
+	if err != nil {
+		tx.Rollback(bgctx)
+		return err
+	}
+	return nil
 }
 
 /*
