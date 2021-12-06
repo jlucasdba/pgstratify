@@ -208,7 +208,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	return tablematches, nil
 }
 
-func (i *DBInterface) UpdateTableOptions(match tableMatch) error {
+func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool) error {
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
 	// can use a less restrictive share update exclusive lock
@@ -273,20 +273,23 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch) error {
 			fmt.Printf("  Set %s to %s (previous setting %s)\n", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, val, *match.Options[val].NewSetting)
 		}
-		tx2,err := tx.Begin(bgctx)
-		if err != nil {
-			panic(err)
-		}
-		r,err := tx2.Query(bgctx,altersql)
-		for r.Next() {}
-		if r.Err() != nil {
-			err:=r.Err()
-			tx2.Rollback(bgctx)
-			fmt.Println("Unable to set storage paramter %s: %v",val,err)
-		}
-		err=tx2.Commit(bgctx)
-		if err != nil {
-			panic(err)
+		if !dryrun {
+			tx2, err := tx.Begin(bgctx)
+			if err != nil {
+				panic(err)
+			}
+			r, err := tx2.Query(bgctx, altersql)
+			for r.Next() {
+			}
+			if r.Err() != nil {
+				err := r.Err()
+				tx2.Rollback(bgctx)
+				fmt.Println("Unable to set storage paramter %s: %v", val, err)
+			}
+			err = tx2.Commit(bgctx)
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 
