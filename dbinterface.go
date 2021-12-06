@@ -44,7 +44,7 @@ func (i *DBInterface) ListDBs() []string {
 		datnames = append(datnames, s)
 	}
 	if r.Err() != nil {
-		panic(err)
+		panic(r.Err())
 	}
 	return datnames
 }
@@ -80,7 +80,7 @@ func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]string, bool, err
 		matcheddbmap[datname] = true
 	}
 	if r.Err() != nil {
-		return nil, false, err
+		return nil, false, r.Err()
 	}
 
 	return matcheddblist, initialmatch, nil
