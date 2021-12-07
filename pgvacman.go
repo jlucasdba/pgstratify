@@ -2,10 +2,10 @@ package main
 
 //import "context"
 //import "github.com/jackc/pgx/v4"
+import "errors"
 import "fmt"
 import "gopkg.in/yaml.v2"
 import "os"
-import "sort"
 import "strings"
 
 type configSectionType map[string]string
@@ -139,18 +139,14 @@ func main() {
 
 		for _, val := range tablematches {
 			fmt.Printf("Table %s:\n", val.QuotedFullName)
-			sortedkeys := make([]string, 0, len(val.Options))
-			for key2, _ := range val.Options {
-				sortedkeys = append(sortedkeys, key2)
-			}
-			sort.Strings(sortedkeys)
-			for _, val2 := range sortedkeys {
-				if val.Options[val2].NewSetting == nil {
-					fmt.Printf("  Reset %s\n", val2)
-				} else if val.Options[val2].OldSetting == nil {
-					fmt.Printf("  Set %s to %s (previously unset)\n", val2, *val.Options[val2].NewSetting)
+			//err := currconn.UpdateTableOptions(val, false)
+			err := currconn.UpdateTableOptions(val, false, WaitModeWait, 5)
+			if err != nil {
+				var alerr *AcquireLockError
+				if errors.As(err, &alerr) {
+					fmt.Printf("%v\n", err)
 				} else {
-					fmt.Printf("  Set %s to %s (previous setting %s)\n", val2, *val.Options[val2].NewSetting, *val.Options[val2].OldSetting)
+					panic(err)
 				}
 			}
 		}
