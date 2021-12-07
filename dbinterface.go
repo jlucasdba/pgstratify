@@ -260,10 +260,10 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	// There's a lot of synchronization wrapped around here to try to avoid these
 	// cases.
 
-	// Context that's cancelled when the lock statement finishes
-	lockdonectx, lockdone := context.WithCancel(bgctx)
 	// Context implementing the timeout
 	timeoutctx, timeoutcancel := context.WithTimeout(bgctx, DurationSeconds(timeout))
+	// Channel that's closed when the lock statement returns
+	lockdone := make(chan int)
 	// Channel that's closed when the goroutine completes
 	grdone := make(chan int)
 	go func() {
@@ -272,7 +272,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 
 		for {
 			select {
-			case <-lockdonectx.Done():
+			case <-lockdone:
 				return
 			case <-timeoutctx.Done():
 				err := i.conn.PgConn().CancelRequest(bgctx)
@@ -281,7 +281,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 				}
 				select {
 				// if the cancel worked, we're good
-				case <-lockdonectx.Done():
+				case <-lockdone:
 					return
 				// if it didn't, after 100ms, loop
 				// and try to cancel again
@@ -293,7 +293,8 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	}()
 
 	r, err := tx.Query(bgctx, locksql)
-	lockdone()
+	// close lockdone as soon as the Query call returns
+	close(lockdone)
 	// don't proceed till we're sure the timeout goroutine is done
 	<-grdone
 	if err != nil {
