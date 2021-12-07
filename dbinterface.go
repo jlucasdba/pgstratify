@@ -193,7 +193,6 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 			r.Close()
 			return nil, err
 		}
-		//fmt.Printf("Matched table %s with section %d, rule %d\n", quotedfull, tablematchnum, rulenum)
 
 		options := make(map[string]Option)
 		err = json.Unmarshal([]byte(jsonfromdb), &options)
