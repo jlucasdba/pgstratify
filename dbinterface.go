@@ -13,11 +13,6 @@ import "sort"
 
 var bgctx = context.Background()
 
-// Struct wrapping a database connection.
-type DBInterface struct {
-	dsn  string
-	conn *pgx.Conn
-}
 
 // Error indicating failure to acquire a lock
 type AcquireLockError struct {
@@ -31,6 +26,12 @@ func (e AcquireLockError) Error() string {
 
 func (e AcquireLockError) Unwrap() error {
 	return e.Err
+}
+
+// Struct wrapping a database connection.
+type DBInterface struct {
+	dsn  string
+	conn *pgx.Conn
 }
 
 func NewDBInterface(dsn string) DBInterface {
