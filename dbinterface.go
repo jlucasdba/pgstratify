@@ -305,13 +305,13 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		var altersql string
 		if match.Options[val].NewSetting == nil {
 			fmt.Printf("  Reset %s\n", val)
-			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, val)
+			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
 		} else if match.Options[val].OldSetting == nil {
 			fmt.Printf("  Set %s to %s (previously unset)\n", val, *match.Options[val].NewSetting)
-			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, val, *match.Options[val].NewSetting)
+			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		} else {
 			fmt.Printf("  Set %s to %s (previous setting %s)\n", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
-			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, val, *match.Options[val].NewSetting)
+			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		}
 		if !dryrun {
 			tx2, err := tx.Begin(bgctx)
