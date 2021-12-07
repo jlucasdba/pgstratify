@@ -11,8 +11,12 @@ import "github.com/jlucasdba/pgvacman/queries"
 import "regexp"
 import "sort"
 
-var bgctx = context.Background()
+const (
+	WaitModeWait   = 1
+	WaitModeNowait = 2
+)
 
+var bgctx = context.Background()
 
 // Error indicating failure to acquire a lock
 type AcquireLockError struct {
