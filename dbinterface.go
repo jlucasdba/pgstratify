@@ -8,6 +8,7 @@ import "github.com/jackc/pgconn"
 import "github.com/jackc/pgerrcode"
 import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
+import log "github.com/sirupsen/logrus"
 import "regexp"
 import "sort"
 import "time"
@@ -44,7 +45,7 @@ func NewDBInterface(dsn string) DBInterface {
 	i.dsn = dsn
 	conn, err := pgx.Connect(bgctx, dsn)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	i.conn = conn
 	return i
@@ -58,19 +59,19 @@ func (i *DBInterface) ListDBs() []string {
 	datnames := make([]string, 0)
 	r, err := i.conn.Query(bgctx, "select datname from pg_database where datallowconn = 't'")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	for r.Next() {
 		var s string
 		err := r.Scan(&s)
 		if err != nil {
 			r.Close()
-			panic(err)
+			log.Fatal(err)
 		}
 		datnames = append(datnames, s)
 	}
 	if r.Err() != nil {
-		panic(r.Err())
+		log.Fatal(r.Err())
 	}
 	return datnames
 }
@@ -275,17 +276,20 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			case <-lockdone:
 				return
 			case <-timeoutctx.Done():
+				log.Debug("Sending statement cancel request")
 				err := i.conn.PgConn().CancelRequest(bgctx)
 				if err != nil {
-					panic(err)
+					log.Panic(err)
 				}
 				select {
 				// if the cancel worked, we're good
 				case <-lockdone:
+					log.Debug("Statement completed after cancel")
 					return
 				// if it didn't, after 100ms, loop
 				// and try to cancel again
 				case <-time.After(100 * time.Millisecond):
+					log.Debug("100ms have passed - looping")
 					//do nothing, just loop
 				}
 			}
@@ -332,19 +336,19 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	for _, val := range sortedkeys {
 		var altersql string
 		if match.Options[val].NewSetting == nil {
-			fmt.Printf("  Reset %s\n", val)
+			log.Infof("  Reset %s", val)
 			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
 		} else if match.Options[val].OldSetting == nil {
-			fmt.Printf("  Set %s to %s (previously unset)\n", val, *match.Options[val].NewSetting)
+			log.Infof("  Set %s to %s (previously unset)", val, *match.Options[val].NewSetting)
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		} else {
-			fmt.Printf("  Set %s to %s (previous setting %s)\n", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
+			log.Infof("  Set %s to %s (previous setting %s)", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		}
 		if !dryrun {
 			tx2, err := tx.Begin(bgctx)
 			if err != nil {
-				panic(err)
+				log.Fatal(err)
 			}
 			r, err := tx2.Query(bgctx, altersql)
 			for r.Next() {
@@ -352,11 +356,11 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			if r.Err() != nil {
 				err := r.Err()
 				tx2.Rollback(bgctx)
-				fmt.Printf("  Unable to set storage parameter %s: %v\n", val, err)
+				log.Warnf("  Unable to set storage parameter %s: %v", val, err)
 			} else {
 				err = tx2.Commit(bgctx)
 				if err != nil {
-					panic(err)
+					log.Fatal(err)
 				}
 			}
 		}
@@ -376,7 +380,7 @@ func DurationSeconds(seconds float64) time.Duration {
 	x, err := time.ParseDuration(z)
 	if err != nil {
 		// should never happen
-		panic(err)
+		log.Panic(err)
 	}
 	return x
 }

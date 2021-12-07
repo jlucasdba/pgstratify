@@ -4,9 +4,19 @@ package main
 //import "github.com/jackc/pgx/v4"
 import "errors"
 import "fmt"
+import log "github.com/sirupsen/logrus"
 import "gopkg.in/yaml.v2"
 import "os"
 import "strings"
+
+// Define custom log formatter with very minimal output.
+// We're only really using log levels for verbosity - we
+// don't need fancy formatting.
+type PlainFormatter struct{}
+
+func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
+	return []byte(entry.Message + "\n"), nil
+}
 
 type configSectionType map[string]string
 
@@ -66,6 +76,10 @@ func buildDSN(conf configSectionType) string {
 }
 
 func main() {
+	// set custom formatter for logging
+	log.SetFormatter(new(PlainFormatter))
+	log.SetLevel(log.InfoLevel)
+
 	x := configFileType{}
 
 	// read the config file
@@ -81,8 +95,8 @@ func main() {
 	}
 
 	dsn := buildDSN(x.Config)
-	fmt.Println(dsn)
-	fmt.Println(buildURL(x.Config))
+	log.Debug(dsn)
+	log.Debug(buildURL(x.Config))
 	// connect to the database
 	/*
 		conn,err := pgx.Connect(context.Background(),dsn)
@@ -115,7 +129,7 @@ func main() {
 		initialconn.Close()
 		panic(err)
 	}
-	fmt.Println(matcheddbnames)
+	log.Debug(matcheddbnames)
 	// close the initial connection unless we can reuse it
 	if !initialdbmatch {
 		initialconn.Close()
@@ -125,12 +139,12 @@ func main() {
 		var currconn DBInterface
 		if idx == 0 && initialdbmatch {
 			currconn = initialconn
-			fmt.Printf("Reusing connection to %s\n", val)
+			log.Infof("Reusing connection to %s", val)
 		} else {
 			perdbconfig := x.Config
 			perdbconfig["dbname"] = val
 			currconn = NewDBInterface(buildDSN(perdbconfig))
-			fmt.Printf("Connected to %s\n", val)
+			log.Infof("Connected to %s", val)
 		}
 		tablematches, err := currconn.GetTableMatches(val, x.Match, x.Ruleset)
 		if err != nil {
@@ -138,13 +152,13 @@ func main() {
 		}
 
 		for _, val := range tablematches {
-			fmt.Printf("Table %s:\n", val.QuotedFullName)
+			log.Infof("Table %s:", val.QuotedFullName)
 			//err := currconn.UpdateTableOptions(val, false)
-			err := currconn.UpdateTableOptions(val, false, WaitModeWait, 5)
+			err := currconn.UpdateTableOptions(val, false, WaitModeWait, 0)
 			if err != nil {
 				var alerr *AcquireLockError
 				if errors.As(err, &alerr) {
-					fmt.Printf("%v\n", err)
+					log.Warnf("%v", err)
 				} else {
 					panic(err)
 				}
