@@ -244,30 +244,58 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		return err
 	}
 
-	// launch goroutine that will wait for timeout and then cancel the lock attempt
-	// lockdone will cancel the goroutine if the lock statement succeeds before
-	// the timeout expires
-	// we could use the context passed to query for timeout, but that kills
+	// Launch goroutine that will wait for timeout and then cancel the lock attempt.
+	// Lockdone will cancel the goroutine if the lock statement succeeds before
+	// the timeout expires.
+	//
+	// We could use the context passed to query for timeout, but that kills
 	// the db connection, which is inconvenient...
+	//
+	// Especially with short timeouts, there's potentially race conditions here
+	// where the timeout triggers and cancel fires before the lock statement
+	// executes, or the cancel fires *after* the lock is acquired
+	// and kills the next statement. Per the documentation, there's no way to
+	// know if the cancel actually succeeded in killing anything, so there's also
+	// loop potential. Specifically for a lock wait though, a cancel should work.
+	// There's a lot of synchronization wrapped around here to try to avoid these
+	// cases.
+
+	// Context that's cancelled when the lock statement finishes
 	lockdonectx, lockdone := context.WithCancel(bgctx)
+	// Context implementing the timeout
 	timeoutctx, timeoutcancel := context.WithTimeout(bgctx, DurationSeconds(timeout))
+	// Channel that's closed when the goroutine completes
+	grdone := make(chan int)
 	go func() {
+		defer close(grdone)
 		defer timeoutcancel()
 
-		select {
-		case <-lockdonectx.Done():
-			return
-		case <-timeoutctx.Done():
-			err := i.conn.PgConn().CancelRequest(bgctx)
-			if err != nil {
-				panic(err)
+		for {
+			select {
+			case <-lockdonectx.Done():
+				return
+			case <-timeoutctx.Done():
+				err := i.conn.PgConn().CancelRequest(bgctx)
+				if err != nil {
+					panic(err)
+				}
+				select {
+				// if the cancel worked, we're good
+				case <-lockdonectx.Done():
+					return
+				// if it didn't, after 100ms, loop
+				// and try to cancel again
+				case <-time.After(100 * time.Millisecond):
+					//do nothing, just loop
+				}
 			}
-			return
 		}
 	}()
 
 	r, err := tx.Query(bgctx, locksql)
 	lockdone()
+	// don't proceed till we're sure the timeout goroutine is done
+	<-grdone
 	if err != nil {
 		tx.Rollback(bgctx)
 		var pgerr *pgconn.PgError
