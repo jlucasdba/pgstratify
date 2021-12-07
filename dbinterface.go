@@ -10,6 +10,7 @@ import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
 import "regexp"
 import "sort"
+import "time"
 
 const (
 	WaitModeWait   = 1
@@ -213,7 +214,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	return tablematches, nil
 }
 
-func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool) error {
+func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode int, timeout float64) error {
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
 	// can use a less restrictive share update exclusive lock
@@ -227,22 +228,54 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool) error {
 	}
 
 	var locksql string
-	if usesharelock {
-		locksql = fmt.Sprintf("lock table %s in share update exclusive mode nowait", match.QuotedFullName)
-	} else {
-		locksql = fmt.Sprintf("lock table %s in access exclusive mode nowait", match.QuotedFullName)
+	{
+		lockmode := "access exclusive"
+		if usesharelock {
+			lockmode = "share update exclusive"
+		}
+		lockwait := ""
+		if waitmode == WaitModeNowait {
+			lockwait = " nowait"
+		}
+		locksql = fmt.Sprintf("lock table %s in %s mode%s", match.QuotedFullName, lockmode, lockwait)
 	}
 
 	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{pgx.ReadCommitted, pgx.ReadWrite, pgx.NotDeferrable})
 	if err != nil {
 		return err
 	}
+
+	// launch goroutine that will wait for timeout and then cancel the lock attempt
+	// lockdone will cancel the goroutine if the lock statement succeeds before
+	// the timeout expires
+	// we could use the context passed to query for timeout, but that kills
+	// the db connection, which is inconvenient...
+	lockdonectx, lockdone := context.WithCancel(bgctx)
+	timeoutctx, timeoutcancel := context.WithTimeout(bgctx, DurationSeconds(timeout))
+	go func() {
+		defer timeoutcancel()
+
+		select {
+		case <-lockdonectx.Done():
+			return
+		case <-timeoutctx.Done():
+			err := i.conn.PgConn().CancelRequest(bgctx)
+			if err != nil {
+				panic(err)
+			}
+			return
+		}
+	}()
+
 	r, err := tx.Query(bgctx, locksql)
+	lockdone()
 	if err != nil {
 		tx.Rollback(bgctx)
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
-			return AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
+			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
 		} else {
 			return err
 		}
@@ -255,6 +288,8 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool) error {
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
+			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
 		} else {
 			return err
 		}
@@ -304,6 +339,17 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool) error {
 		return err
 	}
 	return nil
+}
+
+// utility function returning a duration in seconds
+func DurationSeconds(seconds float64) time.Duration {
+	z := fmt.Sprintf("%fs", seconds)
+	x, err := time.ParseDuration(z)
+	if err != nil {
+		// should never happen
+		panic(err)
+	}
+	return x
 }
 
 /*
