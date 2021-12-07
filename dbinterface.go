@@ -217,8 +217,8 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode int, timeout float64) error {
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
-	// can use a less restrictive share update exclusive lock
-	// We evaluate whether we only have such parameters with a regexp
+	// can use a less restrictive share update exclusive lock.
+	// We evaluate whether we only have such parameters with a regexp.
 	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
 	usesharelock := true
 	for key, _ := range match.Options {
