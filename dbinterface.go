@@ -325,10 +325,11 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 				err := r.Err()
 				tx2.Rollback(bgctx)
 				fmt.Printf("  Unable to set storage parameter %s: %v\n", val, err)
-			}
-			err = tx2.Commit(bgctx)
-			if err != nil {
-				panic(err)
+			} else {
+				err = tx2.Commit(bgctx)
+				if err != nil {
+					panic(err)
+				}
 			}
 		}
 	}
