@@ -42,18 +42,6 @@ type configFileType struct {
 	Match   []matchType
 }
 
-type table struct {
-	SchemaName     string
-	TableName      string
-	QuotedFullName string
-}
-
-type databaseMatches map[string]bool
-
-func newDatabaseMatches() map[string]bool {
-	return make(map[string]bool, 0)
-}
-
 type tableMatchOption struct {
 	OldSetting *string
 	NewSetting *string
