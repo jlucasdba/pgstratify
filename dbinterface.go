@@ -325,7 +325,10 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	// don't proceed till we're sure the timeout goroutine is done
 	<-grdone
 	if err != nil {
-		tx.Rollback(bgctx)
+		rberr := tx.Rollback(bgctx)
+		if rberr != nil {
+			log.Fatal(rberr)
+		}
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
@@ -339,7 +342,10 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	}
 	if r.Err() != nil {
 		err := r.Err()
-		tx.Rollback(bgctx)
+		rberr := tx.Rollback(bgctx)
+		if rberr != nil {
+			log.Fatal(rberr)
+		}
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
@@ -378,7 +384,10 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			}
 			if r.Err() != nil {
 				err := r.Err()
-				tx2.Rollback(bgctx)
+				rberr := tx2.Rollback(bgctx)
+				if rberr != nil {
+					log.Fatal(rberr)
+				}
 				log.Warnf("  Unable to set storage parameter %s: %v", val, err)
 			} else {
 				err = tx2.Commit(bgctx)
@@ -391,7 +400,10 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 
 	err = tx.Commit(bgctx)
 	if err != nil {
-		tx.Rollback(bgctx)
+		rberr := tx.Rollback(bgctx)
+		if rberr != nil {
+			log.Fatal(rberr)
+		}
 		return err
 	}
 	return nil
