@@ -263,7 +263,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		locksql = fmt.Sprintf("lock table %s in %s mode%s", match.QuotedFullName, lockmode, lockwait)
 	}
 
-	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{pgx.ReadCommitted, pgx.ReadWrite, pgx.NotDeferrable})
+	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
 	if err != nil {
 		return err
 	}
