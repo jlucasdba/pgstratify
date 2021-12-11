@@ -6,7 +6,7 @@ import "errors"
 import "fmt"
 import "github.com/pborman/getopt/v2"
 import log "github.com/sirupsen/logrus"
-import "golang.org/x/crypto/ssh/terminal"
+import "golang.org/x/term"
 import "gopkg.in/yaml.v2"
 import "os"
 import "regexp"
@@ -125,7 +125,7 @@ func (co ConnectOptions) EscapeStrings() ConnectOptions {
 func (co *ConnectOptions) PromptPassword() error {
 	for {
 		fmt.Print("Password: ")
-		buf, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+		buf, err := term.ReadPassword(int(os.Stdin.Fd()))
 		fmt.Println("")
 		if err != nil {
 			return err
