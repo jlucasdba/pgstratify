@@ -34,21 +34,43 @@ func (e AcquireLockError) Unwrap() error {
 	return e.Err
 }
 
-// Struct wrapping a database connection.
-type DBInterface struct {
-	dsn  string
-	conn *pgx.Conn
+// Error indicating password authentication failure
+type PasswordAuthenticationError struct {
+	Err error
 }
 
-func NewDBInterface(dsn string) DBInterface {
+func (e PasswordAuthenticationError) Error() string {
+	return e.Err.Error()
+}
+
+func (e PasswordAuthenticationError) Unwrap() error {
+	return e.Err
+}
+
+// Struct wrapping a database connection.
+type DBInterface struct {
+	config *pgx.ConnConfig
+	conn   *pgx.Conn
+}
+
+func NewDBInterface(connectoptions *ConnectOptions) (*DBInterface, error) {
 	i := DBInterface{}
-	i.dsn = dsn
-	conn, err := pgx.Connect(bgctx, dsn)
+	var err error
+
+	i.config, err = pgx.ParseConfig(connectoptions.BuildDSN())
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
+	}
+	conn, err := pgx.ConnectConfig(bgctx, i.config)
+	if err != nil {
+		var pgerr *pgconn.PgError
+		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.InvalidPassword {
+			return nil, &PasswordAuthenticationError{err}
+		}
+		return nil, err
 	}
 	i.conn = conn
-	return i
+	return &i, nil
 }
 
 func (i *DBInterface) Close() {
