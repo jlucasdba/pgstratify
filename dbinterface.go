@@ -379,7 +379,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			if err != nil {
 				log.Fatal(err)
 			}
-			r, err := tx2.Query(bgctx, altersql)
+			r, _ := tx2.Query(bgctx, altersql)
 			for r.Next() {
 			}
 			if r.Err() != nil {
