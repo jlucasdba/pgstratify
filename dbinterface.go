@@ -240,6 +240,9 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	// can use a less restrictive share update exclusive lock.
 	// We evaluate whether we only have such parameters with a regexp.
 	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
+	if err != nil {
+		log.Panic(err)
+	}
 	usesharelock := true
 	for key := range match.Options {
 		if !sharelockre.MatchString(key) {
