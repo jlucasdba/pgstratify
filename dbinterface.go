@@ -175,9 +175,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 			for key3, val3 := range val2.Set {
 				rulesetsfordb[key][idx2].Set[key3] = val3
 			}
-			for _, val3 := range val2.Reset {
-				rulesetsfordb[key][idx2].Reset = append(rulesetsfordb[key][idx2].Reset, val3)
-			}
+			rulesetsfordb[key][idx2].Reset = append(rulesetsfordb[key][idx2].Reset, val2.Reset...)
 		}
 	}
 	buf, err := json.Marshal(matchsectionsfordb)
