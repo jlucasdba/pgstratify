@@ -241,7 +241,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	// We evaluate whether we only have such parameters with a regexp.
 	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
 	usesharelock := true
-	for key, _ := range match.Options {
+	for key := range match.Options {
 		if !sharelockre.MatchString(key) {
 			usesharelock = false
 		}
@@ -349,7 +349,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 
 	// Now we cycle through the table options and try to set each one
 	sortedkeys := make([]string, 0, len(match.Options))
-	for key, _ := range match.Options {
+	for key := range match.Options {
 		sortedkeys = append(sortedkeys, key)
 	}
 	sort.Strings(sortedkeys)
