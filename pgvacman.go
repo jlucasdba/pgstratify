@@ -31,10 +31,9 @@ type ruleType struct {
 type rulesetType map[string][]ruleType
 
 type matchType struct {
-	Database string `yaml:"database"`
-	Schema   string `yaml:"schema"`
-	Table    string `yaml:"table"`
-	Ruleset  string `yaml:"ruleset"`
+	Schema  string `yaml:"schema"`
+	Table   string `yaml:"table"`
+	Ruleset string `yaml:"ruleset"`
 }
 
 type configFileType struct {
@@ -143,7 +142,7 @@ Connection Options:
   -U, --username=USERNAME   user name to connect as
   -w, --no-password         never prompt for password
   -W, --password            force password prompt
-  -d, --dbname              initial database name to connect to (default: "postgres")
+  -d, --dbname              database name to connect to and update
 
 `, os.Args[0])
 
@@ -210,7 +209,7 @@ func main() {
 	// if initial attempt fails, -w was not passed, and
 	// we haven't previously prompted, prompt for password
 	// and try again
-	initialconn, err := NewDBInterface(&connectoptions)
+	conn, err := NewDBInterface(&connectoptions)
 	if err != nil {
 		var pwerr *PasswordAuthenticationError
 		if errors.As(err, &pwerr) && !(*opt_password || *opt_no_password) {
@@ -218,7 +217,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			initialconn, err = NewDBInterface(&connectoptions)
+			conn, err = NewDBInterface(&connectoptions)
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -226,50 +225,24 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-	matcheddbnames, initialdbmatch, err := initialconn.GetDBMatches(x.Match)
+
+	tablematches, err := conn.GetTableMatches(x.Match, x.Ruleset)
 	if err != nil {
-		initialconn.Close()
-		log.Fatal(err)
-	}
-	log.Debug(matcheddbnames)
-	// close the initial connection unless we can reuse it
-	if !initialdbmatch {
-		initialconn.Close()
+		panic(err)
 	}
 
-	for idx, val := range matcheddbnames {
-		var currconn *DBInterface
-		if idx == 0 && initialdbmatch {
-			currconn = initialconn
-			log.Infof("Reusing connection to %s", val)
-		} else {
-			perdbconfig := connectoptions
-			perdbconfig.DBName = &val
-			currconn, err = NewDBInterface(&connectoptions)
-			if err != nil {
-				log.Fatal(err)
-			}
-			log.Infof("Connected to %s", val)
-		}
-		tablematches, err := currconn.GetTableMatches(val, x.Match, x.Ruleset)
+	for _, val := range tablematches {
+		log.Infof("Table %s:", val.QuotedFullName)
+		//err := conn.UpdateTableOptions(val, false)
+		err := conn.UpdateTableOptions(val, false, WaitModeWait, 0)
 		if err != nil {
-			panic(err)
-		}
-
-		for _, val := range tablematches {
-			log.Infof("Table %s:", val.QuotedFullName)
-			//err := currconn.UpdateTableOptions(val, false)
-			err := currconn.UpdateTableOptions(val, false, WaitModeWait, 0)
-			if err != nil {
-				var alerr *AcquireLockError
-				if errors.As(err, &alerr) {
-					log.Warnf("%v", err)
-				} else {
-					panic(err)
-				}
+			var alerr *AcquireLockError
+			if errors.As(err, &alerr) {
+				log.Warnf("%v", err)
+			} else {
+				panic(err)
 			}
 		}
-
-		currconn.Close()
 	}
+	conn.Close()
 }

@@ -98,44 +98,7 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
-func (i *DBInterface) GetDBMatches(matchconfig []matchType) ([]string, bool, error) {
-	matchdbre := make([]string, 0, 10)
-	matcheddbmap := make(map[string]bool)
-	matcheddblist := make([]string, 0)
-	initialmatch := false
-
-	for _, v := range matchconfig {
-		matchdbre = append(matchdbre, v.Database)
-	}
-	r, err := i.conn.Query(bgctx, "select x.rownum, d.datname, case when d.datname=current_database() then 't'::bool else 'f'::bool end as initial from pg_database d join (select row_number() over () as rownum, re from (select unnest($1::text[]) as re) xx) x on d.datname ~ x.re where datallowconn='t' order by initial desc, pg_database_size(datname) desc, datname", matchdbre)
-	if err != nil {
-		return nil, false, err
-	}
-	for r.Next() {
-		var rownum int
-		var datname string
-		var initial bool
-		err := r.Scan(&rownum, &datname, &initial)
-		if err != nil {
-			r.Close()
-			return nil, false, err
-		}
-		if !matcheddbmap[datname] {
-			matcheddblist = append(matcheddblist, datname)
-		}
-		if initial {
-			initialmatch = true
-		}
-		matcheddbmap[datname] = true
-	}
-	if r.Err() != nil {
-		return nil, false, r.Err()
-	}
-
-	return matcheddblist, initialmatch, nil
-}
-
-func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, rulesetconfig rulesetType) ([]tableMatch, error) {
+func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rulesetType) ([]tableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
 		Condition string            `json:"condition"`
@@ -147,7 +110,6 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	type Ruleset []Rule
 
 	type MatchSection struct {
-		DBRE     string `json:"dbre"`
 		SchemaRE string `json:"schemare"`
 		TableRE  string `json:"tablere"`
 		Ruleset  string `json:"ruleset"`
@@ -165,7 +127,7 @@ func (i *DBInterface) GetTableMatches(datname string, matchconfig []matchType, r
 	// Build data structures to be dumped to json for query input
 	matchsectionsfordb := make([]MatchSection, 0, cap(matchconfig))
 	for _, val := range matchconfig {
-		matchsectionsfordb = append(matchsectionsfordb, MatchSection{DBRE: val.Database, SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
+		matchsectionsfordb = append(matchsectionsfordb, MatchSection{SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
 	}
 	rulesetsfordb := make(map[string]Ruleset, len(rulesetconfig))
 	for key, val := range rulesetconfig {
