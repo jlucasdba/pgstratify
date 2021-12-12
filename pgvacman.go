@@ -192,9 +192,9 @@ func main() {
 	}
 
 	// parse it
-	err = yaml.Unmarshal(dat, &x)
+	err = yaml.UnmarshalStrict(dat, &x)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// connect to the database
