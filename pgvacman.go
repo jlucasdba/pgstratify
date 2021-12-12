@@ -233,7 +233,6 @@ func main() {
 
 	for _, val := range tablematches {
 		log.Infof("Table %s:", val.QuotedFullName)
-		//err := conn.UpdateTableOptions(val, false)
 		err := conn.UpdateTableOptions(val, false, WaitModeWait, 0)
 		if err != nil {
 			var alerr *AcquireLockError

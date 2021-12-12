@@ -381,27 +381,3 @@ func DurationSeconds(seconds float64) time.Duration {
 	}
 	return x
 }
-
-/*
-type Table
-
-func (t *Table) GetOptions() TableOptions {
-	datnames:=make([]string,0)
-	r,err:=i.conn.Query(bgctx,"select relnamespace::regnamespace::text, relname, reloptions[1] as reloptname, reloptions[2] as reloptsetting from (select relnamespace,relname,regexp_split_to_array(unnest(reloptions),'=') as reloptions from pg_class where oid=$1) x",)
-	if err != nil {
-		panic(err)
-	}
-	{
-		defer r.Close()
-		for r.Next() {
-			var s string
-			err:=r.Scan(&s)
-			if err != nil {
-				panic(err)
-			}
-			datnames=append(datnames,s)
-		}
-	}
-	return datnames
-}
-*/
