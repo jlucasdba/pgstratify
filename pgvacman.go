@@ -1,3 +1,5 @@
+// Copyright (c) 2021 James Lucas
+
 package main
 
 //import "context"

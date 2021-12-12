@@ -1,3 +1,5 @@
+// Copyright (c) 2021 James Lucas
+
 package queries
 
 const RuleMatchQuery string = `with matchjsonin as (select $1::jsonb as matchjsonin),
