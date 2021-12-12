@@ -199,6 +199,8 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 }
 
 func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode int, timeout float64) error {
+	log.Infof("Table %s:", val.QuotedFullName)
+
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
 	// can use a less restrictive share update exclusive lock.
