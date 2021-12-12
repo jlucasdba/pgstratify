@@ -188,7 +188,7 @@ func main() {
 	// read the config file
 	dat, err := os.ReadFile("test.yml")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// parse it
@@ -228,7 +228,7 @@ func main() {
 
 	tablematches, err := conn.GetTableMatches(x.Match, x.Ruleset)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	for _, val := range tablematches {
@@ -240,7 +240,7 @@ func main() {
 			if errors.As(err, &alerr) {
 				log.Warnf("%v", err)
 			} else {
-				panic(err)
+				log.Fatal(err)
 			}
 		}
 	}
