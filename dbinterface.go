@@ -199,7 +199,27 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 }
 
 func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode int, timeout float64) error {
-	log.Infof("Table %s:", val.QuotedFullName)
+	// ugly hack so we output all messages on function return
+	// but skip outputting if we failed to acquire lock in
+	// WaitModeNowait
+	type DeferredMessage struct {
+		LogFunc func(...interface{})
+		Message string
+	}
+
+	type DeferredMessages []DeferredMessage
+	deferredmessages := make(DeferredMessages, 0)
+
+	suppress := false
+	defer func() {
+		if !suppress {
+			for _, m := range deferredmessages {
+				m.LogFunc(m.Message)
+			}
+		}
+	}()
+
+	deferredmessages = append(deferredmessages, DeferredMessage{LogFunc: log.Info, Message: fmt.Sprintf("Table %s:", match.QuotedFullName)})
 
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
@@ -297,6 +317,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		}
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
+			suppress = true
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
 		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
@@ -314,6 +335,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		}
 		var pgerr *pgconn.PgError
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
+			suppress = true
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
 		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
@@ -331,13 +353,13 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	for _, val := range sortedkeys {
 		var altersql string
 		if match.Options[val].NewSetting == nil {
-			log.Infof("  Reset %s", val)
+			deferredmessages = append(deferredmessages, DeferredMessage{LogFunc: log.Info, Message: fmt.Sprintf("  Reset %s", val)})
 			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
 		} else if match.Options[val].OldSetting == nil {
-			log.Infof("  Set %s to %s (previously unset)", val, *match.Options[val].NewSetting)
+			deferredmessages = append(deferredmessages, DeferredMessage{LogFunc: log.Info, Message: fmt.Sprintf("  Set %s to %s (previously unset)", val, *match.Options[val].NewSetting)})
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		} else {
-			log.Infof("  Set %s to %s (previous setting %s)", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)
+			deferredmessages = append(deferredmessages, DeferredMessage{LogFunc: log.Info, Message: fmt.Sprintf("  Set %s to %s (previous setting %s)", val, *match.Options[val].NewSetting, *match.Options[val].OldSetting)})
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		}
 		if !dryrun {
@@ -354,7 +376,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 				if rberr != nil {
 					log.Fatal(rberr)
 				}
-				log.Warnf("  Unable to set storage parameter %s: %v", val, err)
+				deferredmessages = append(deferredmessages, DeferredMessage{LogFunc: log.Warn, Message: fmt.Sprintf("  Unable to set storage parameter %s: %v", val, err)})
 			} else {
 				err = tx2.Commit(bgctx)
 				if err != nil {

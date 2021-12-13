@@ -233,12 +233,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	/*
+		We make a first opportunistic pass through the tables and try to set
+		parameters in nowait mode. Hopefully this knocks out the majority of
+		the tables near the start of the run.
+		We suppress output of anything that failed to lock during this pass
+		because they will be retried.
+	*/
 	for _, val := range tablematches {
-		err := conn.UpdateTableOptions(val, false, WaitModeWait, 0)
+		err := conn.UpdateTableOptions(val, false, WaitModeNowait, 0)
 		if err != nil {
 			var alerr *AcquireLockError
 			if errors.As(err, &alerr) {
-				log.Warnf("%v", err)
 			} else {
 				log.Fatal(err)
 			}
