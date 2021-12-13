@@ -13,6 +13,7 @@ import "github.com/jlucasdba/pgvacman/queries"
 import log "github.com/sirupsen/logrus"
 import "regexp"
 import "sort"
+import "sync"
 import "time"
 
 const (
@@ -21,6 +22,8 @@ const (
 )
 
 var bgctx = context.Background()
+// used to synchronize multi-statement output between multiple threads
+var outlock sync.Mutex
 
 // Error indicating failure to acquire a lock
 type AcquireLockError struct {
@@ -213,6 +216,8 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	suppress := false
 	defer func() {
 		if !suppress {
+			outlock.Lock()
+			defer outlock.Unlock()
 			for _, m := range deferredmessages {
 				m.LogFunc(m.Message)
 			}
