@@ -11,6 +11,7 @@ import "github.com/jackc/pgerrcode"
 import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
 import log "github.com/sirupsen/logrus"
+import "reflect"
 import "regexp"
 import "sort"
 import "sync"
@@ -259,62 +260,72 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		return err
 	}
 
-	// Launch goroutine that will wait for timeout and then cancel the lock attempt.
-	// Lockdone will cancel the goroutine if the lock statement succeeds before
-	// the timeout expires.
-	//
-	// We could use the context passed to query for timeout, but that kills
-	// the db connection, which is inconvenient...
-	//
-	// Especially with short timeouts, there's potentially race conditions here
-	// where the timeout triggers and cancel fires before the lock statement
-	// executes, or the cancel fires *after* the lock is acquired
-	// and kills the next statement. Per the documentation, there's no way to
-	// know if the cancel actually succeeded in killing anything, so there's also
-	// loop potential. Specifically for a lock wait though, a cancel should work.
-	// There's a lot of synchronization wrapped around here to try to avoid these
-	// cases.
+	// variables declared but not initialized here for visibility
+	var lockdone chan int
+	var grdone chan int
+	var timeoutctx context.Context
+	var timeoutcancel context.CancelFunc
+	if waitmode == WaitModeWait {
+		// Launch goroutine that will wait for timeout and then cancel the lock attempt.
+		// Lockdone will cancel the goroutine if the lock statement succeeds before
+		// the timeout expires.
+		//
+		// We could use the context passed to query for timeout, but that kills
+		// the db connection, which is inconvenient...
+		//
+		// Especially with short timeouts, there's potentially race conditions here
+		// where the timeout triggers and cancel fires before the lock statement
+		// executes, or the cancel fires *after* the lock is acquired
+		// and kills the next statement. Per the documentation, there's no way to
+		// know if the cancel actually succeeded in killing anything, so there's also
+		// loop potential. Specifically for a lock wait though, a cancel should work.
+		// There's a lot of synchronization wrapped around here to try to avoid these
+		// cases.
 
-	// Context implementing the timeout
-	timeoutctx, timeoutcancel := context.WithTimeout(bgctx, DurationSeconds(timeout))
-	// Channel that's closed when the lock statement returns
-	lockdone := make(chan int)
-	// Channel that's closed when the goroutine completes
-	grdone := make(chan int)
-	go func() {
-		defer close(grdone)
-		defer timeoutcancel()
+		// Context implementing the timeout
+		timeoutctx, timeoutcancel = context.WithTimeout(bgctx, DurationSeconds(timeout))
+		// Channel that's closed when the lock statement returns
+		lockdone = make(chan int)
+		// Channel that's closed when the goroutine completes
+		grdone = make(chan int)
+		go func() {
+			defer close(grdone)
+			defer timeoutcancel()
 
-		for {
-			select {
-			case <-lockdone:
-				return
-			case <-timeoutctx.Done():
-				log.Debug("Sending statement cancel request")
-				err := i.conn.PgConn().CancelRequest(bgctx)
-				if err != nil {
-					log.Panic(err)
-				}
+			for {
 				select {
-				// if the cancel worked, we're good
 				case <-lockdone:
-					log.Debug("Statement completed after cancel")
 					return
-				// if it didn't, after 100ms, loop
-				// and try to cancel again
-				case <-time.After(100 * time.Millisecond):
-					log.Debug("100ms have passed - looping")
-					//do nothing, just loop
+				case <-timeoutctx.Done():
+					log.Debug("Sending statement cancel request")
+					err := i.conn.PgConn().CancelRequest(bgctx)
+					if err != nil {
+						log.Panic(err)
+					}
+					select {
+					// if the cancel worked, we're good
+					case <-lockdone:
+						log.Debug("Statement completed after cancel")
+						return
+					// if it didn't, after 100ms, loop
+					// and try to cancel again
+					case <-time.After(100 * time.Millisecond):
+						log.Debug("100ms have passed - looping")
+						//do nothing, just loop
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	r, err := tx.Query(bgctx, locksql)
-	// close lockdone as soon as the Query call returns
-	close(lockdone)
-	// don't proceed till we're sure the timeout goroutine is done
-	<-grdone
+	if waitmode == WaitModeWait {
+		// close lockdone as soon as the Query call returns
+		close(lockdone)
+		// don't proceed till we're sure the timeout goroutine is done
+		<-grdone
+	}
+
 	if err != nil {
 		rberr := tx.Rollback(bgctx)
 		if rberr != nil {
@@ -324,7 +335,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
 			suppress = true
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
-		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
+		} else if !reflect.ValueOf(timeoutctx).IsZero() && errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
 		} else {
 			return err
