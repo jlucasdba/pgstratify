@@ -421,11 +421,8 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			if err != nil {
 				log.Fatal(err)
 			}
-			r, _ := tx2.Query(bgctx, altersql)
-			for r.Next() {
-			}
-			if r.Err() != nil {
-				err := r.Err()
+			_, err = tx2.Exec(bgctx, altersql)
+			if err != nil {
 				rberr := tx2.Rollback(bgctx)
 				if rberr != nil {
 					log.Fatal(rberr)
