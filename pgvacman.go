@@ -135,6 +135,7 @@ Usage:
   %s [OPTION] ... [RULEFILE]
 
 Options:
+  -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
   -v, --verbose                   write a lot of output
   -?, --help                      show this help, then exit
 
@@ -166,6 +167,7 @@ func main() {
 
 	var connectoptions ConnectOptions
 
+	opt_jobs := getopt.IntLong("jobs", 'j', 1)
 	opt_verbose := getopt.BoolLong("verbose", 'v')
 	opt_help := getopt.BoolLong("help", '?')
 	connectoptions.Host = getopt.StringLong("host", 'h', "")
@@ -178,6 +180,10 @@ func main() {
 	err := getopt.Getopt(GetoptCallback)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *opt_jobs < 1 {
+		log.Fatal(errors.New("number of parallel jobs must be at least 1"))
 	}
 
 	x := configFileType{}
@@ -228,9 +234,25 @@ func main() {
 		}
 	}
 
+	// retrieve all the matching tables
 	tablematches, err := conn.GetTableMatches(x.Match, x.Ruleset)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// allocate db connections up to *opt_jobs (or len(tablematches), whichever is less)
+	connections := []*DBInterface{conn}
+	for i := 1; i < func(a int, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}(len(tablematches), *opt_jobs); i++ {
+		newconn, err := NewDBInterface(&connectoptions)
+		if err != nil {
+			log.Fatal(err)
+		}
+		connections = append(connections, newconn)
 	}
 
 	/*
@@ -240,15 +262,46 @@ func main() {
 		We suppress output of anything that failed to lock during this pass
 		because they will be retried.
 	*/
-	for _, val := range tablematches {
-		err := conn.UpdateTableOptions(val, false, WaitModeNowait, 0)
-		if err != nil {
-			var alerr *AcquireLockError
-			if errors.As(err, &alerr) {
-			} else {
-				log.Fatal(err)
-			}
+
+	// goroutine iterating over tablematches and returning them on a channel
+	matchiter := make(chan tableMatch)
+	go func() {
+		for _, v := range tablematches {
+			matchiter <- v
 		}
+		close(matchiter)
+	}()
+
+	/*
+		Launch a goroutine for each connection, each reading matches from matchiter.
+		When matchiter is closed, close donechan.
+	*/
+	donechans := make([]chan bool, 0, len(connections))
+	for _, val := range connections {
+		donechan := make(chan bool)
+		donechans = append(donechans, donechan)
+		go func(conn *DBInterface, donechan chan bool) {
+			for m := range matchiter {
+				err := conn.UpdateTableOptions(m, false, WaitModeNowait, 0)
+				if err != nil {
+					var alerr *AcquireLockError
+					if errors.As(err, &alerr) {
+					} else {
+						log.Fatal(err)
+					}
+				}
+			}
+			close(donechan)
+		}(val, donechan)
 	}
-	conn.Close()
+
+	// wait until all donechans are closed
+	for _, donechan := range donechans {
+		<-donechan
+	}
+
+	// close all connections
+	for _, val := range connections {
+		val.Close()
+	}
 }
