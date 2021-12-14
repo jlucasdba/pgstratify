@@ -374,9 +374,9 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 		}()
 	}
 
-	r, err := tx.Query(bgctx, locksql)
+	_, err = tx.Exec(bgctx, locksql)
 	if waitmode == WaitModeWait {
-		// close lockdone as soon as the Query call returns
+		// close lockdone as soon as the Exec call returns
 		close(lockdone)
 		// don't proceed till we're sure the timeout goroutine is done
 		<-grdone
@@ -392,24 +392,6 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			suppress = true
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
 		} else if !reflect.ValueOf(timeoutctx).IsZero() && errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
-			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
-		} else {
-			return err
-		}
-	}
-	for r.Next() {
-	}
-	if r.Err() != nil {
-		err := r.Err()
-		rberr := tx.Rollback(bgctx)
-		if rberr != nil {
-			log.Fatal(rberr)
-		}
-		var pgerr *pgconn.PgError
-		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
-			suppress = true
-			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
-		} else if errors.Is(timeoutctx.Err(), context.DeadlineExceeded) && pgerr.Code == pgerrcode.QueryCanceled {
 			return &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
 		} else {
 			return err
