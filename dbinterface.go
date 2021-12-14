@@ -159,15 +159,71 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 
 	/*
 		Here is where the black magic happens. We've coerced the configured rules
-		into json-encoded data structures. We pass these to the database and this
-		query pulls it apart and joins against pg_class.
+		into json-encoded data structures. We pass these to the database and build
+		temporary tables, which are joined with catalog tables to find the matching
+		tables and applicable rules.
 
 		The result is all matching tables in the database that require at least one
 		option update, with all the effective new settings. Note that if a table
 		matches a section, but does not match any rules within it, it will still not
 		match subsequent sections.
 	*/
-	r, err := i.conn.Query(bgctx, queries.RuleMatchQuery, matchsectionsfordbjson, rulesetsfordbjson)
+	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
+	if err != nil {
+		return nil, err
+	}
+	// we don't need the temp tables after this transaction ends, and we're not writing, so rollback is fine
+	defer tx.Rollback(bgctx)
+
+	_, err = tx.Exec(bgctx, queries.TablesTempTab, matchsectionsfordbjson)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, queries.TablesTempTabPK)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, `analyze pg_temp.tables`)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(bgctx, queries.TableOptionsTempTab)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, queries.TableOptionsTempTabPK)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, `analyze pg_temp.tableoptions`)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(bgctx, queries.RulesetsTempTab, rulesetsfordbjson)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, queries.RulesetsTempTabPK)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTab, rulesetsfordbjson)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTabPK)
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec(bgctx, `analyze pg_temp.rulesets, pg_temp.rulesets_settings`)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := tx.Query(bgctx, queries.RuleMatchQuery)
 	if err != nil {
 		return nil, err
 	}
