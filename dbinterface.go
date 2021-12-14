@@ -135,7 +135,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 	for key, val := range rulesetconfig {
 		rulesetsfordb[key] = make(Ruleset, 0, cap(val))
 		for idx2, val2 := range val {
-			rulesetsfordb[key] = append(rulesetsfordb[key], Rule{Condition: val2.Condition, Value: val2.Value, Set: make(map[string]string, len(val2.Set)), Reset: make([]string, cap(val2.Reset))})
+			rulesetsfordb[key] = append(rulesetsfordb[key], Rule{Condition: val2.Condition, Value: val2.Value, Set: make(map[string]string, len(val2.Set)), Reset: make([]string, 0, cap(val2.Reset))})
 			for key3, val3 := range val2.Set {
 				rulesetsfordb[key][idx2].Set[key3] = val3
 			}
