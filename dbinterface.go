@@ -421,7 +421,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 			if err != nil {
 				log.Fatal(err)
 			}
-			_, err = tx2.Exec(bgctx, altersql)
+			_, err = tx2.Exec(bgctx, altersql, pgx.QuerySimpleProtocol(true))
 			if err != nil {
 				rberr := tx2.Rollback(bgctx)
 				if rberr != nil {
