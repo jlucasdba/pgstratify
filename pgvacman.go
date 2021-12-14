@@ -272,9 +272,21 @@ func main() {
 		close(matchiter)
 	}()
 
+	// goroutine receiving failed tablematches from workers
+	lockpendingrcv := make(chan tableMatch)
+	lockpendingret := make(chan []tableMatch)
+	go func() {
+		lockpending := make([]tableMatch, 0)
+		for m := range lockpendingrcv {
+			lockpending = append(lockpending, m)
+		}
+		lockpendingret <- lockpending
+	}()
+
 	/*
 		Launch a goroutine for each connection, each reading matches from matchiter.
-		When matchiter is closed, close donechan.
+		Tables that fail to lock are fed to lockpendingrcv (other errors are fatal).
+		When matchiter is closed, close donechan to signal goroutine is complete.
 	*/
 	donechans := make([]chan bool, 0, len(connections))
 	for _, val := range connections {
@@ -286,6 +298,7 @@ func main() {
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
+						lockpendingrcv <- m
 					} else {
 						log.Fatal(err)
 					}
@@ -298,6 +311,17 @@ func main() {
 	// wait until all donechans are closed
 	for _, donechan := range donechans {
 		<-donechan
+	}
+
+	// close lockpendingrcv
+	close(lockpendingrcv)
+
+	// retrieve lockpending, and close lockpendingret
+	lockpending := <-lockpendingret
+	close(lockpendingret)
+	log.Info("Tables pending lock:")
+	for _, val := range lockpending {
+		fmt.Println(val.QuotedFullName)
 	}
 
 	// close all connections
