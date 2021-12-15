@@ -319,13 +319,61 @@ func main() {
 	// retrieve lockpending, and close lockpendingret
 	lockpending := <-lockpendingret
 	close(lockpendingret)
-	log.Info("Tables pending lock:")
-	for _, val := range lockpending {
-		fmt.Println(val.QuotedFullName)
+
+	// if nothing is pending, we are done
+	if len(lockpending) == 0 {
+		// close all connections
+		for _, val := range connections {
+			val.Close()
+		}
+		os.Exit(1)
 	}
 
-	// close all connections
-	for _, val := range connections {
-		val.Close()
+	// otherwise, if we have more connections than pending tables, close some
+	overconns := len(connections) - len(lockpending)
+	if overconns > 0 {
+		for _, val := range connections[len(connections)-overconns : len(connections)] {
+			val.Close()
+		}
+		connections = append([]*DBInterface(nil), connections[0:len(connections)-overconns]...)
 	}
+
+	// now another iterator goroutine to cycle through the remaining tables
+	matchiter = make(chan tableMatch)
+	go func(matchiter chan<- tableMatch) {
+		for _, v := range lockpending {
+			matchiter <- v
+		}
+		close(matchiter)
+	}(matchiter)
+
+	// goroutines for each connection, pulling from matchiter and modifying in wait mode
+	donechans = make([]chan bool, 0, len(connections))
+	for _, val := range connections {
+		donechan := make(chan bool)
+		donechans = append(donechans, donechan)
+		go func(conn *DBInterface, donechan chan<- bool) {
+			for m := range matchiter {
+				err := conn.UpdateTableOptions(m, false, WaitModeWait, -1)
+				if err != nil {
+					var alerr *AcquireLockError
+					if errors.As(err, &alerr) {
+						log.Warn(err)
+					} else {
+						log.Fatal(err)
+					}
+				}
+			}
+			close(donechan)
+			// close the connection when we're done as well
+			conn.Close()
+		}(val, donechan)
+	}
+
+	// wait until all donechans are closed
+	for _, donechan := range donechans {
+		<-donechan
+	}
+
+	os.Exit(0)
 }
