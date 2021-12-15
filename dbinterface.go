@@ -23,6 +23,7 @@ const (
 )
 
 var bgctx = context.Background()
+
 // used to synchronize multi-statement output between multiple threads
 var outlock sync.Mutex
 
