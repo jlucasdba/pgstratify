@@ -174,7 +174,12 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 		return nil, err
 	}
 	// we don't need the temp tables after this transaction ends, and we're not writing, so rollback is fine
-	defer tx.Rollback(bgctx)
+	defer func() {
+		err := tx.Rollback(bgctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	_, err = tx.Exec(bgctx, queries.TablesTempTab, matchsectionsfordbjson)
 	if err != nil {
