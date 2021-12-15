@@ -327,7 +327,8 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	var grdone chan int
 	var timeoutctx context.Context
 	var timeoutcancel context.CancelFunc
-	if waitmode == WaitModeWait {
+	// we only need to execute the timeout logic in wait mode, and if timeout is zero or greater
+	if waitmode == WaitModeWait && timeout >= 0 {
 		// Launch goroutine that will wait for timeout and then cancel the lock attempt.
 		// Lockdone will cancel the goroutine if the lock statement succeeds before
 		// the timeout expires.
@@ -381,7 +382,7 @@ func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode
 	}
 
 	_, err = tx.Exec(bgctx, locksql)
-	if waitmode == WaitModeWait {
+	if waitmode == WaitModeWait && timeout >= 0 {
 		// close lockdone as soon as the Exec call returns
 		close(lockdone)
 		// don't proceed till we're sure the timeout goroutine is done
