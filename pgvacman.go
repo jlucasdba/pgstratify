@@ -158,6 +158,7 @@ Options:
   -n, --dry-run                   output what would be done without making changes (implies -v)
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
       --lock-timeout=NUM          per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode)
+      --skip-locked               skip tables that cannot be immediately locked
   -v, --verbose                   write a lot of output
   -?, --help                      show this help, then exit
 
@@ -193,6 +194,7 @@ func main() {
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
 	opt_lock_timeout := new(float64)
 	getopt.FlagLong(opt_lock_timeout, "lock-timeout", 0)
+	opt_skip_locked := getopt.BoolLong("skip-locked", 0)
 	opt_verbose := getopt.BoolLong("verbose", 'v')
 	// handled by callback, we don't store the value
 	getopt.BoolLong("help", '?')
@@ -336,10 +338,14 @@ func main() {
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
-						if *opt_dry_run {
-							// in dry-run mode, don't emit to channel
-							// also we need to output even on lock failure for dry-run
+						if *opt_dry_run || *opt_skip_locked {
+							// in dry-run or skip-locked modes, don't emit to channel
+							// also we need to output even on lock failure for either
 							rslt.OutputResult(&outmutex)
+							if *opt_skip_locked {
+								// we also want to emit the warning in skip-locked mode
+								log.Warn(err)
+							}
 						} else {
 							lockpendingrcv <- m
 						}
