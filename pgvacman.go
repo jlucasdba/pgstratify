@@ -13,6 +13,7 @@ import "gopkg.in/yaml.v2"
 import "os"
 import "regexp"
 import "strings"
+import "sync"
 
 // Define custom log formatter with very minimal output.
 // We're only really using log levels for verbosity - we
@@ -123,6 +124,23 @@ func (co *ConnectOptions) PromptPassword() error {
 			str := string(buf)
 			co.Password = &str
 			return nil
+		}
+	}
+}
+
+func (rslt *UpdateTableOptionsResult) OutputResult() {
+	log.Infof("Table %s:", rslt.Match.QuotedFullName)
+	for _, val := range rslt.SettingSuccess {
+		if val.Success {
+			if rslt.Match.Options[val.Setting].NewSetting == nil {
+				log.Infof("  Reset %s (previous setting %s)", val.Setting, *rslt.Match.Options[val.Setting].OldSetting)
+			} else {
+				if rslt.Match.Options[val.Setting].OldSetting == nil {
+					log.Infof("  Set %s to %s (previously unset)", val.Setting, *rslt.Match.Options[val.Setting].NewSetting)
+				} else {
+					log.Infof("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Options[val.Setting].NewSetting, *rslt.Match.Options[val.Setting].OldSetting)
+				}
+			}
 		}
 	}
 }
@@ -288,13 +306,15 @@ func main() {
 		Tables that fail to lock are fed to lockpendingrcv (other errors are fatal).
 		When matchiter is closed, close donechan to signal goroutine is complete.
 	*/
+	// mutex for synchronizing multi-line output - it's not worth juggling more channels for this
+	var outmutex sync.Mutex
 	donechans := make([]chan bool, 0, len(connections))
 	for _, val := range connections {
 		donechan := make(chan bool)
 		donechans = append(donechans, donechan)
 		go func(conn *DBInterface, lockpendingrcv chan<- tableMatch, donechan chan<- bool) {
 			for m := range matchiter {
-				err := conn.UpdateTableOptions(m, false, WaitModeNowait, 0)
+				rslt, err := conn.UpdateTableOptions(m, false, WaitModeNowait, 0)
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
@@ -302,6 +322,11 @@ func main() {
 					} else {
 						log.Fatal(err)
 					}
+				} else {
+					// only output on sucess since tables will be retried
+					outmutex.Lock()
+					rslt.OutputResult()
+					outmutex.Unlock()
 				}
 			}
 			close(donechan)
@@ -354,7 +379,7 @@ func main() {
 		donechans = append(donechans, donechan)
 		go func(conn *DBInterface, donechan chan<- bool) {
 			for m := range matchiter {
-				err := conn.UpdateTableOptions(m, false, WaitModeWait, -1)
+				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, -1)
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
@@ -362,6 +387,10 @@ func main() {
 					} else {
 						log.Fatal(err)
 					}
+				} else {
+					outmutex.Lock()
+					rslt.OutputResult()
+					outmutex.Unlock()
 				}
 			}
 			close(donechan)
