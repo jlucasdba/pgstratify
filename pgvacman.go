@@ -357,7 +357,7 @@ func main() {
 	// otherwise, if we have more connections than pending tables, close some
 	overconns := len(connections) - len(lockpending)
 	if overconns > 0 {
-		for _, val := range connections[len(connections)-overconns : len(connections)] {
+		for _, val := range connections[len(connections)-overconns:] {
 			val.Close()
 		}
 		connections = append([]*DBInterface(nil), connections[0:len(connections)-overconns]...)
