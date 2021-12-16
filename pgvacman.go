@@ -2,8 +2,7 @@
 
 package main
 
-//import "context"
-//import "github.com/jackc/pgx/v4"
+import "context"
 import "errors"
 import "fmt"
 import "github.com/pborman/getopt/v2"
@@ -14,6 +13,7 @@ import "os"
 import "regexp"
 import "strings"
 import "sync"
+import "time"
 
 // Define custom log formatter with very minimal output.
 // We're only really using log levels for verbosity - we
@@ -379,7 +379,24 @@ func main() {
 		donechans = append(donechans, donechan)
 		go func(conn *DBInterface, donechan chan<- bool) {
 			for m := range matchiter {
+				// if we wait more than a second, output a wait message
+				waitctx, waitcancel := context.WithCancel(context.Background())
+				go func() {
+					timer := time.NewTimer(time.Second)
+					select {
+					case <-waitctx.Done():
+						break
+					case <-timer.C:
+						log.Infof("Waiting for lock on table %s", m.QuotedFullName)
+					}
+					// drain the channel, per the docs
+					if !timer.Stop() {
+						<-timer.C
+					}
+				}()
 				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, -1)
+				// cancel the wait - if the message fired already this does nothing
+				waitcancel()
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
