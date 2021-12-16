@@ -184,15 +184,16 @@ func GetoptCallback(opt getopt.Option) bool {
 func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.WarnLevel)
 
 	var connectoptions ConnectOptions
 
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
 	opt_timeout := new(float64)
-	getopt.FlagLong(opt_timeout,"timeout",'T')
+	getopt.FlagLong(opt_timeout, "timeout", 'T')
 	opt_verbose := getopt.BoolLong("verbose", 'v')
-	opt_help := getopt.BoolLong("help", '?')
+	// handled by callback, we don't store the value
+	getopt.BoolLong("help", '?')
 	connectoptions.Host = getopt.StringLong("host", 'h', "")
 	connectoptions.Port = getopt.IntLong("port", 'p', -1)
 	connectoptions.Username = getopt.StringLong("username", 'U', "")
@@ -215,12 +216,11 @@ func main() {
 		log.Fatal(errors.New("timeout must be greater than 0"))
 	}
 
-	x := ConfigFile{}
+	if *opt_verbose {
+		log.SetLevel(log.InfoLevel)
+	}
 
-	_ = opt_verbose
-	_ = opt_help
-	_ = opt_no_password
-	_ = opt_password
+	x := ConfigFile{}
 
 	// read the config file
 	dat, err := os.ReadFile("test.yml")
