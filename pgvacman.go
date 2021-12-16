@@ -155,6 +155,7 @@ Usage:
   %s [OPTION] ... [RULEFILE]
 
 Options:
+  -n, --dry-run                   output what would be done without making changes (implies -v)
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
   -T, --timeout=NUM               per-table lock wait timeout in seconds (must be greater than 0, no effect in nowait mode)
   -v, --verbose                   write a lot of output
@@ -188,6 +189,7 @@ func main() {
 
 	var connectoptions ConnectOptions
 
+	opt_dry_run := getopt.BoolLong("dry-run", 'n')
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
 	opt_timeout := new(float64)
 	getopt.FlagLong(opt_timeout, "timeout", 'T')
@@ -214,6 +216,11 @@ func main() {
 		*opt_timeout = -1
 	} else if *opt_timeout <= 0 {
 		log.Fatal(errors.New("timeout must be greater than 0"))
+	}
+
+	// dry-run implies verbose
+	if *opt_dry_run {
+		*opt_verbose = true
 	}
 
 	if *opt_verbose {
@@ -325,11 +332,17 @@ func main() {
 		donechans = append(donechans, donechan)
 		go func(conn *DBInterface, lockpendingrcv chan<- TableMatch, donechan chan<- bool) {
 			for m := range matchiter {
-				rslt, err := conn.UpdateTableOptions(m, false, WaitModeNowait, 0)
+				rslt, err := conn.UpdateTableOptions(m, *opt_dry_run, WaitModeNowait, 0)
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
-						lockpendingrcv <- m
+						if *opt_dry_run {
+							// in dry-run mode, don't emit to channel
+							// also we need to output even on lock failure for dry-run
+							rslt.OutputResult(&outmutex)
+						} else {
+							lockpendingrcv <- m
+						}
 					} else {
 						log.Fatal(err)
 					}
