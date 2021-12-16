@@ -157,7 +157,7 @@ Usage:
 Options:
   -n, --dry-run                   output what would be done without making changes (implies -v)
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
-  -T, --timeout=NUM               per-table lock wait timeout in seconds (must be greater than 0, no effect in nowait mode)
+      --lock-timeout=NUM          per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode)
   -v, --verbose                   write a lot of output
   -?, --help                      show this help, then exit
 
@@ -191,8 +191,8 @@ func main() {
 
 	opt_dry_run := getopt.BoolLong("dry-run", 'n')
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
-	opt_timeout := new(float64)
-	getopt.FlagLong(opt_timeout, "timeout", 'T')
+	opt_lock_timeout := new(float64)
+	getopt.FlagLong(opt_lock_timeout, "lock-timeout", 0)
 	opt_verbose := getopt.BoolLong("verbose", 'v')
 	// handled by callback, we don't store the value
 	getopt.BoolLong("help", '?')
@@ -212,10 +212,10 @@ func main() {
 		log.Fatal(errors.New("number of parallel jobs must be at least 1"))
 	}
 
-	if getopt.GetCount("timeout") == 0 {
-		*opt_timeout = -1
-	} else if *opt_timeout <= 0 {
-		log.Fatal(errors.New("timeout must be greater than 0"))
+	if getopt.GetCount("lock-timeout") == 0 {
+		*opt_lock_timeout = -1
+	} else if *opt_lock_timeout <= 0 {
+		log.Fatal(errors.New("lock-timeout, when specified, must be greater than 0"))
 	}
 
 	// dry-run implies verbose
@@ -416,7 +416,7 @@ func main() {
 						<-timer.C
 					}
 				}()
-				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, *opt_timeout)
+				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, *opt_lock_timeout)
 				// cancel the wait - if the message fired already this does nothing
 				waitcancel()
 				if err != nil {
