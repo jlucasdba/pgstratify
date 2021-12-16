@@ -326,7 +326,7 @@ func main() {
 		for _, val := range connections {
 			val.Close()
 		}
-		os.Exit(1)
+		os.Exit(0)
 	}
 
 	// otherwise, if we have more connections than pending tables, close some
