@@ -156,6 +156,7 @@ Usage:
 
 Options:
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
+  -T, --timeout=NUM               per-table lock wait timeout in seconds (must be greater than 0, no effect in nowait mode)
   -v, --verbose                   write a lot of output
   -?, --help                      show this help, then exit
 
@@ -188,6 +189,8 @@ func main() {
 	var connectoptions ConnectOptions
 
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
+	opt_timeout := new(float64)
+	getopt.FlagLong(opt_timeout,"timeout",'T')
 	opt_verbose := getopt.BoolLong("verbose", 'v')
 	opt_help := getopt.BoolLong("help", '?')
 	connectoptions.Host = getopt.StringLong("host", 'h', "")
@@ -204,6 +207,12 @@ func main() {
 
 	if *opt_jobs < 1 {
 		log.Fatal(errors.New("number of parallel jobs must be at least 1"))
+	}
+
+	if getopt.GetCount("timeout") == 0 {
+		*opt_timeout = -1
+	} else if *opt_timeout <= 0 {
+		log.Fatal(errors.New("timeout must be greater than 0"))
 	}
 
 	x := ConfigFile{}
@@ -394,7 +403,7 @@ func main() {
 						<-timer.C
 					}
 				}()
-				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, -1)
+				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, *opt_timeout)
 				// cancel the wait - if the message fired already this does nothing
 				waitcancel()
 				if err != nil {
