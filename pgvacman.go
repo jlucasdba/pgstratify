@@ -24,35 +24,35 @@ func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 	return []byte(entry.Message + "\n"), nil
 }
 
-type ruleType struct {
+type ConfigRule struct {
 	Condition string            `yaml:"condition"`
 	Value     uint64            `yaml:"value"`
 	Set       map[string]string `yaml:"set"`
 	Reset     []string          `yaml:"reset"`
 }
 
-type rulesetType map[string][]ruleType
+type ConfigRuleset map[string][]ConfigRule
 
-type matchType struct {
+type ConfigMatch struct {
 	Schema  string `yaml:"schema"`
 	Table   string `yaml:"table"`
 	Ruleset string `yaml:"ruleset"`
 }
 
-type configFileType struct {
-	Ruleset rulesetType
-	Match   []matchType
+type ConfigFile struct {
+	Ruleset ConfigRuleset
+	Match   []ConfigMatch
 }
 
-type tableMatchOption struct {
+type TableMatchOption struct {
 	OldSetting *string
 	NewSetting *string
 }
 
-type tableMatch struct {
+type TableMatch struct {
 	Reloid         int
 	QuotedFullName string
-	Options        map[string]tableMatchOption
+	Options        map[string]TableMatchOption
 }
 
 type ConnectOptions struct {
@@ -206,7 +206,7 @@ func main() {
 		log.Fatal(errors.New("number of parallel jobs must be at least 1"))
 	}
 
-	x := configFileType{}
+	x := ConfigFile{}
 
 	_ = opt_verbose
 	_ = opt_help
@@ -284,8 +284,8 @@ func main() {
 	*/
 
 	// goroutine iterating over tablematches and returning them on a channel
-	matchiter := make(chan tableMatch)
-	go func(matchiter chan<- tableMatch) {
+	matchiter := make(chan TableMatch)
+	go func(matchiter chan<- TableMatch) {
 		for _, v := range tablematches {
 			matchiter <- v
 		}
@@ -293,10 +293,10 @@ func main() {
 	}(matchiter)
 
 	// goroutine receiving failed tablematches from workers
-	lockpendingrcv := make(chan tableMatch)
-	lockpendingret := make(chan []tableMatch)
-	go func(matchin <-chan tableMatch, matchesout chan<- []tableMatch) {
-		lockpending := make([]tableMatch, 0)
+	lockpendingrcv := make(chan TableMatch)
+	lockpendingret := make(chan []TableMatch)
+	go func(matchin <-chan TableMatch, matchesout chan<- []TableMatch) {
+		lockpending := make([]TableMatch, 0)
 		for m := range matchin {
 			lockpending = append(lockpending, m)
 		}
@@ -314,7 +314,7 @@ func main() {
 	for _, val := range connections {
 		donechan := make(chan bool)
 		donechans = append(donechans, donechan)
-		go func(conn *DBInterface, lockpendingrcv chan<- tableMatch, donechan chan<- bool) {
+		go func(conn *DBInterface, lockpendingrcv chan<- TableMatch, donechan chan<- bool) {
 			for m := range matchiter {
 				rslt, err := conn.UpdateTableOptions(m, false, WaitModeNowait, 0)
 				if err != nil {
@@ -364,8 +364,8 @@ func main() {
 	}
 
 	// now another iterator goroutine to cycle through the remaining tables
-	matchiter = make(chan tableMatch)
-	go func(matchiter chan<- tableMatch) {
+	matchiter = make(chan TableMatch)
+	go func(matchiter chan<- TableMatch) {
 		for _, v := range lockpending {
 			matchiter <- v
 		}

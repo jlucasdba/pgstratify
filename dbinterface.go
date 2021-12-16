@@ -101,7 +101,7 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
-func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rulesetType) ([]tableMatch, error) {
+func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatch, rulesetconfig ConfigRuleset) ([]TableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
 		Condition string            `json:"condition"`
@@ -125,7 +125,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 	}
 
 	// Initialize structure to hold results with capacities from input values
-	tablematches := make([]tableMatch, 0)
+	tablematches := make([]TableMatch, 0)
 
 	// Build data structures to be dumped to json for query input
 	matchsectionsfordb := make([]MatchSection, 0, cap(matchconfig))
@@ -247,11 +247,11 @@ func (i *DBInterface) GetTableMatches(matchconfig []matchType, rulesetconfig rul
 			r.Close()
 			return nil, err
 		}
-		tmoptions := make(map[string]tableMatchOption)
+		tmoptions := make(map[string]TableMatchOption)
 		for key, val := range options {
-			tmoptions[key] = tableMatchOption(val)
+			tmoptions[key] = TableMatchOption(val)
 		}
-		tablematches = append(tablematches, tableMatch{Reloid: reloid, QuotedFullName: quotedfullname, Options: tmoptions})
+		tablematches = append(tablematches, TableMatch{Reloid: reloid, QuotedFullName: quotedfullname, Options: tmoptions})
 	}
 	if r.Err() != nil {
 		return nil, r.Err()
@@ -266,11 +266,11 @@ type UpdateTableOptionsResultSettingSuccess struct {
 }
 
 type UpdateTableOptionsResult struct {
-	Match          tableMatch
+	Match          TableMatch
 	SettingSuccess []UpdateTableOptionsResultSettingSuccess
 }
 
-func (i *DBInterface) UpdateTableOptions(match tableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
+func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
 	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, len(match.Options))}
 
 	// Nearly all storage parameters don't actually require access
