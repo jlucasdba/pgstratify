@@ -128,7 +128,9 @@ func (co *ConnectOptions) PromptPassword() error {
 	}
 }
 
-func (rslt *UpdateTableOptionsResult) OutputResult() {
+func (rslt *UpdateTableOptionsResult) OutputResult(outmutex *sync.Mutex) {
+	outmutex.Lock()
+	defer outmutex.Unlock()
 	log.Infof("Table %s:", rslt.Match.QuotedFullName)
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
@@ -324,9 +326,7 @@ func main() {
 					}
 				} else {
 					// only output on sucess since tables will be retried
-					outmutex.Lock()
-					rslt.OutputResult()
-					outmutex.Unlock()
+					rslt.OutputResult(&outmutex)
 				}
 			}
 			close(donechan)
@@ -388,9 +388,7 @@ func main() {
 						log.Fatal(err)
 					}
 				} else {
-					outmutex.Lock()
-					rslt.OutputResult()
-					outmutex.Unlock()
+					rslt.OutputResult(&outmutex)
 				}
 			}
 			close(donechan)
