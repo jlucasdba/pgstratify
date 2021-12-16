@@ -330,7 +330,7 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		// cases.
 
 		// Context implementing the timeout
-		timeoutctx, timeoutcancel = context.WithTimeout(bgctx, DurationSeconds(timeout))
+		timeoutctx, timeoutcancel = context.WithTimeout(bgctx, time.Duration(timeout * float64(time.Second)))
 		// Channel that's closed when the lock statement returns
 		lockdone = make(chan int)
 		// Channel that's closed when the goroutine completes
@@ -436,15 +436,4 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		return result, err
 	}
 	return result, nil
-}
-
-// utility function returning a duration in seconds
-func DurationSeconds(seconds float64) time.Duration {
-	z := fmt.Sprintf("%fs", seconds)
-	x, err := time.ParseDuration(z)
-	if err != nil {
-		// should never happen
-		log.Panic(err)
-	}
-	return x
 }
