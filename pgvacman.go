@@ -25,23 +25,21 @@ func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 }
 
 type ConfigRule struct {
-	Condition string            `yaml:"condition"`
-	Value     uint64            `yaml:"value"`
-	Set       map[string]string `yaml:"set"`
-	Reset     []string          `yaml:"reset"`
+	Minrows  uint64             `yaml:"minrows"`
+	Settings map[string]*string `yaml:"settings"`
 }
 
-type ConfigRuleset map[string][]ConfigRule
+type ConfigRuleset []ConfigRule
 
-type ConfigMatch struct {
+type ConfigMatchgroup struct {
 	Schema  string `yaml:"schema"`
 	Table   string `yaml:"table"`
 	Ruleset string `yaml:"ruleset"`
 }
 
 type ConfigFile struct {
-	Ruleset ConfigRuleset
-	Match   []ConfigMatch
+	Matchgroups []ConfigMatchgroup       `yaml:"matchgroups"`
+	Rulesets    map[string]ConfigRuleset `yaml:"rulesets"`
 }
 
 type TableMatchOption struct {
@@ -273,7 +271,7 @@ func main() {
 	}
 
 	// retrieve all the matching tables
-	tablematches, err := conn.GetTableMatches(x.Match, x.Ruleset)
+	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -100,25 +100,23 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
-func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatch, rulesetconfig ConfigRuleset) ([]TableMatch, error) {
+func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetconfig map[string]ConfigRuleset) ([]TableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
-		Condition string            `json:"condition"`
-		Value     uint64            `json:"value"`
-		Set       map[string]string `json:"set"`
-		Reset     []string          `json:"reset"`
+		Minrows  uint64             `json:"minrows"`
+		Settings map[string]*string `json:"settings"`
 	}
 
 	type Ruleset []Rule
 
-	type MatchSection struct {
+	type Matchgroup struct {
 		SchemaRE string `json:"schemare"`
 		TableRE  string `json:"tablere"`
 		Ruleset  string `json:"ruleset"`
 	}
 
 	// define struct for parsing json from db
-	type Option struct {
+	type Setting struct {
 		OldSetting *string `json:"oldsetting"`
 		NewSetting *string `json:"newsetting"`
 	}
@@ -127,26 +125,26 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatch, rulesetconfig C
 	tablematches := make([]TableMatch, 0)
 
 	// Build data structures to be dumped to json for query input
-	matchsectionsfordb := make([]MatchSection, 0, cap(matchconfig))
+	matchgroupsfordb := make([]Matchgroup, 0, len(matchconfig))
 	for _, val := range matchconfig {
-		matchsectionsfordb = append(matchsectionsfordb, MatchSection{SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
+		matchgroupsfordb = append(matchgroupsfordb, Matchgroup{SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
 	}
 	rulesetsfordb := make(map[string]Ruleset, len(rulesetconfig))
 	for key, val := range rulesetconfig {
-		rulesetsfordb[key] = make(Ruleset, 0, cap(val))
+		rulesetsfordb[key] = make(Ruleset, 0, len(val))
 		for idx2, val2 := range val {
-			rulesetsfordb[key] = append(rulesetsfordb[key], Rule{Condition: val2.Condition, Value: val2.Value, Set: make(map[string]string, len(val2.Set)), Reset: make([]string, 0, cap(val2.Reset))})
-			for key3, val3 := range val2.Set {
-				rulesetsfordb[key][idx2].Set[key3] = val3
+			rulesetsfordb[key] = append(rulesetsfordb[key], Rule{Minrows: val2.Minrows, Settings: make(map[string]*string, len(val2.Settings))})
+			for key3, val3 := range val2.Settings {
+				rulesetsfordb[key][idx2].Settings[key3] = val3
 			}
-			rulesetsfordb[key][idx2].Reset = append(rulesetsfordb[key][idx2].Reset, val2.Reset...)
 		}
 	}
-	buf, err := json.Marshal(matchsectionsfordb)
+	buf, err := json.Marshal(matchgroupsfordb)
+
 	if err != nil {
 		return nil, err
 	}
-	matchsectionsfordbjson := string(buf)
+	matchgroupsfordbjson := string(buf)
 	buf, err = json.Marshal(rulesetsfordb)
 	if err != nil {
 		return nil, err
@@ -176,7 +174,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatch, rulesetconfig C
 		}
 	}()
 
-	_, err = tx.Exec(bgctx, queries.TablesTempTab, matchsectionsfordbjson)
+	_, err = tx.Exec(bgctx, queries.TablesTempTab, matchgroupsfordbjson)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +238,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatch, rulesetconfig C
 			return nil, err
 		}
 
-		options := make(map[string]Option)
+		options := make(map[string]Setting)
 		err = json.Unmarshal([]byte(jsonfromdb), &options)
 		if err != nil {
 			r.Close()
