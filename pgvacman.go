@@ -286,7 +286,20 @@ func main() {
 		}
 		return b
 	}(len(tablematches), *opt_jobs); i++ {
-		newconn, err := NewDBInterface(&connectoptions)
+		var newconn *DBInterface
+		var err error
+		if *opt_dry_run {
+			/*
+				An ugly hack, but in the case of a dry-run, there's
+				no need to open additional connections to the database,
+				but we still want the structs so we can use their
+				methods without having totally separate execution flow.
+				Zero structs should be enough for this limited case.
+			*/
+			newconn, err = new(DBInterface), nil
+		} else {
+			newconn, err = NewDBInterface(&connectoptions)
+		}
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -377,7 +390,10 @@ func main() {
 	if len(lockpending) == 0 {
 		// close all connections
 		for _, val := range connections {
-			val.Close()
+			if *opt_dry_run && val.conn == nil {
+			} else {
+				val.Close()
+			}
 		}
 		os.Exit(0)
 	}
