@@ -260,6 +260,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 type UpdateTableOptionsResultSettingSuccess struct {
 	Setting string
 	Success bool
+	Err     error
 }
 
 type UpdateTableOptionsResult struct {
@@ -365,7 +366,7 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 			if rberr != nil {
 				log.Fatal(rberr)
 			}
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false})
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false, Err: err})
 		} else {
 			err = tx2.Commit(bgctx)
 			if err != nil {

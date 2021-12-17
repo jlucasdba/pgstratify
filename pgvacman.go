@@ -127,7 +127,18 @@ func (co *ConnectOptions) PromptPassword() error {
 }
 
 func (rslt *UpdateTableOptionsResult) OutputResult() {
-	log.Infof("Table %s:", rslt.Match.QuotedFullName)
+	anyfailed := false
+	for _, val := range rslt.SettingSuccess {
+		if !val.Success {
+			anyfailed = true
+		}
+	}
+
+	if anyfailed {
+		log.Warnf("Table %s:", rslt.Match.QuotedFullName)
+	} else {
+		log.Infof("Table %s:", rslt.Match.QuotedFullName)
+	}
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
 			if rslt.Match.Options[val.Setting].NewSetting == nil {
@@ -139,6 +150,8 @@ func (rslt *UpdateTableOptionsResult) OutputResult() {
 					log.Infof("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Options[val.Setting].NewSetting, *rslt.Match.Options[val.Setting].OldSetting)
 				}
 			}
+		} else {
+			log.Warnf("  Failed to set %s: %v", val.Setting, val.Err)
 		}
 	}
 }
