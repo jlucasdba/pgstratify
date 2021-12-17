@@ -270,7 +270,7 @@ type UpdateTableOptionsResult struct {
 }
 
 func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
-	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, len(match.Options))}
+	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, len(match.Options))}
 
 	// dryrun case is much shorter, so get it out of the way upfront
 	if dryrun {
