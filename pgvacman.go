@@ -126,9 +126,7 @@ func (co *ConnectOptions) PromptPassword() error {
 	}
 }
 
-func (rslt *UpdateTableOptionsResult) OutputResult(outmutex *sync.Mutex) {
-	outmutex.Lock()
-	defer outmutex.Unlock()
+func (rslt *UpdateTableOptionsResult) OutputResult() {
 	log.Infof("Table %s:", rslt.Match.QuotedFullName)
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
@@ -338,6 +336,7 @@ func main() {
 		When matchiter is closed, close donechan to signal goroutine is complete.
 	*/
 	// mutex for synchronizing multi-line output - it's not worth juggling more channels for this
+	// log is already threadsafe - this is just to keep goroutines from interleaving output lines
 	var outmutex sync.Mutex
 	donechans := make([]chan bool, 0, len(connections))
 	for _, val := range connections {
@@ -352,11 +351,12 @@ func main() {
 						if *opt_dry_run || *opt_skip_locked {
 							// in dry-run or skip-locked modes, don't emit to channel
 							// also we need to output even on lock failure for either
-							rslt.OutputResult(&outmutex)
+							outmutex.Lock()
 							if *opt_skip_locked {
 								// we also want to emit the warning in skip-locked mode
 								log.Warn(err)
 							}
+							outmutex.Unlock()
 						} else {
 							lockpendingrcv <- m
 						}
@@ -365,7 +365,9 @@ func main() {
 					}
 				} else {
 					// only output on sucess since tables will be retried
-					rslt.OutputResult(&outmutex)
+					outmutex.Lock()
+					rslt.OutputResult()
+					outmutex.Unlock()
 				}
 			}
 			close(donechan)
@@ -447,7 +449,9 @@ func main() {
 						log.Fatal(err)
 					}
 				} else {
-					rslt.OutputResult(&outmutex)
+					outmutex.Lock()
+					rslt.OutputResult()
+					outmutex.Unlock()
 				}
 			}
 			close(donechan)
