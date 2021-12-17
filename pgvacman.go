@@ -348,14 +348,13 @@ func main() {
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
-						if *opt_dry_run || *opt_skip_locked {
-							// in dry-run or skip-locked modes, don't emit to channel
-							// also we need to output even on lock failure for either
+						if *opt_skip_locked {
 							outmutex.Lock()
-							if *opt_skip_locked {
-								// we also want to emit the warning in skip-locked mode
-								log.Warn(err)
-							}
+							// in skip-locked modes, don't emit to channel
+							// also we need to output even on lock failure
+							rslt.OutputResult()
+							// we also want to emit the warning in skip-locked mode
+							log.Warn(err)
 							outmutex.Unlock()
 						} else {
 							lockpendingrcv <- m
