@@ -272,6 +272,19 @@ type UpdateTableOptionsResult struct {
 func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
 	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, len(match.Options))}
 
+	// dryrun case is much shorter, so get it out of the way upfront
+	if dryrun {
+		sortedkeys := make([]string, 0, len(match.Options))
+		for key := range match.Options {
+			sortedkeys = append(sortedkeys, key)
+		}
+		sort.Strings(sortedkeys)
+		for _, val := range sortedkeys {
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
+		}
+		return result, nil
+	}
+
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
 	// can use a less restrictive share update exclusive lock.
@@ -344,26 +357,22 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		} else {
 			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		}
-		if !dryrun {
-			tx2, err := tx.Begin(bgctx)
+		tx2, err := tx.Begin(bgctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_, err = tx2.Exec(bgctx, altersql, pgx.QuerySimpleProtocol(true))
+		if err != nil {
+			rberr := tx2.Rollback(bgctx)
+			if rberr != nil {
+				log.Fatal(rberr)
+			}
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false})
+		} else {
+			err = tx2.Commit(bgctx)
 			if err != nil {
 				log.Fatal(err)
 			}
-			_, err = tx2.Exec(bgctx, altersql, pgx.QuerySimpleProtocol(true))
-			if err != nil {
-				rberr := tx2.Rollback(bgctx)
-				if rberr != nil {
-					log.Fatal(rberr)
-				}
-				result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false})
-			} else {
-				err = tx2.Commit(bgctx)
-				if err != nil {
-					log.Fatal(err)
-				}
-				result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
-			}
-		} else {
 			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
 		}
 	}
