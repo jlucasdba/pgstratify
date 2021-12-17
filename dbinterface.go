@@ -319,7 +319,7 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 
 	// we only need to set timeout in wait mode, and if timeout is zero or greater
 	if waitmode == WaitModeWait && timeout >= 0 {
-		_, err = tx.Exec(bgctx, fmt.Sprintf(`set lock_timeout = %s`, pgx.Identifier{fmt.Sprintf(`%fs`, timeout)}.Sanitize()), pgx.QuerySimpleProtocol(true))
+		_, err = tx.Exec(bgctx, fmt.Sprintf(`set lock_timeout = %s`, pgx.QuerySimpleProtocol(true), pgx.Identifier{fmt.Sprintf(`%fs`, timeout)}.Sanitize()))
 		if err != nil {
 			log.Fatal(err)
 		}
