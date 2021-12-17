@@ -430,7 +430,7 @@ func main() {
 					case <-waitctx.Done():
 						break
 					case <-timer.C:
-						log.Infof("Waiting for lock on table %s", m.QuotedFullName)
+						log.Warnf("Waiting for lock on table %s", m.QuotedFullName)
 					}
 					// drain the channel, per the docs
 					if !timer.Stop() {
