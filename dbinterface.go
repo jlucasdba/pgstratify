@@ -12,6 +12,7 @@ import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
 import log "github.com/sirupsen/logrus"
 import "sort"
+import "strings"
 import "time"
 
 const (
@@ -311,15 +312,11 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 	}
 
 	// string specifying if this is a table or materialized view
-	var objecttype string
-	switch match.Relkind {
-	case 'r':
-		objecttype = "table"
-	case 'm':
-		objecttype = "materialized view"
-	default:
-		log.Fatal(errors.New(fmt.Sprintf("unrecognized relkind %c from database for %s", match.Relkind, match.QuotedFullName)))
+	objecttype, err := match.RelkindString()
+	if err != nil {
+		log.Fatal(err)
 	}
+	objecttype = strings.ToLower(objecttype)
 
 	// Now we cycle through the table options and try to set each one
 	sortedkeys := make([]string, 0, len(match.Options))

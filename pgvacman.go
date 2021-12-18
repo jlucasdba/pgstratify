@@ -54,6 +54,17 @@ type TableMatch struct {
 	Options        map[string]TableMatchOption
 }
 
+func (tm *TableMatch) RelkindString() (string, error) {
+	switch tm.Relkind {
+	case 'r':
+		return "Table", nil
+	case 'm':
+		return "Materialized View", nil
+	default:
+		return *new(string), errors.New(fmt.Sprintf("unrecognized relkind %c from database for %s", tm.Relkind, tm.QuotedFullName))
+	}
+}
+
 type ConnectOptions struct {
 	Host     *string
 	Port     *int
