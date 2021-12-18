@@ -49,6 +49,7 @@ type TableMatchOption struct {
 
 type TableMatch struct {
 	Reloid         int
+	Relkind        rune
 	QuotedFullName string
 	Options        map[string]TableMatchOption
 }

@@ -229,10 +229,11 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 
 	for r.Next() {
 		var reloid int
+		var relkind rune
 		var quotedfullname string
 		var jsonfromdb string
 
-		err := r.Scan(&reloid, &quotedfullname, &jsonfromdb)
+		err := r.Scan(&reloid, &relkind, &quotedfullname, &jsonfromdb)
 		if err != nil {
 			r.Close()
 			return nil, err
@@ -248,7 +249,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		for key, val := range options {
 			tmoptions[key] = TableMatchOption(val)
 		}
-		tablematches = append(tablematches, TableMatch{Reloid: reloid, QuotedFullName: quotedfullname, Options: tmoptions})
+		tablematches = append(tablematches, TableMatch{Reloid: reloid, Relkind: relkind, QuotedFullName: quotedfullname, Options: tmoptions})
 	}
 	if r.Err() != nil {
 		return nil, r.Err()
