@@ -14,6 +14,7 @@ import log "github.com/sirupsen/logrus"
 import "regexp"
 import "sort"
 import "strings"
+import "time"
 
 const (
 	WaitModeWait   = 1
@@ -285,6 +286,11 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		return result, nil
 	}
 
+	// Materialized views can't be exlicitly locked, which means handling them needs a different approach
+	if match.Relkind == 'm' {
+		return i.updateMaterializedViewOptions(match, waitmode, timeout)
+	}
+
 	// Nearly all storage parameters don't actually require access
 	// exclusive lock - if we are only setting such parameters, we
 	// can use a less restrictive share update exclusive lock.
@@ -369,6 +375,117 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 			}
 			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false, Err: err})
 		} else {
+			err = tx2.Commit(bgctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
+		}
+	}
+
+	err = tx.Commit(bgctx)
+	if err != nil {
+		rberr := tx.Rollback(bgctx)
+		if rberr != nil {
+			log.Fatal(rberr)
+		}
+		return result, err
+	}
+	return result, nil
+}
+
+func (i *DBInterface) updateMaterializedViewOptions(match TableMatch, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
+	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, len(match.Options))}
+
+	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
+	if err != nil {
+		return result, err
+	}
+
+	if waitmode == WaitModeNowait {
+		// we simulate nowait by setting lock_timeout to 1ms (0 means wait forever)
+		_, err = tx.Exec(bgctx, `set lock_timeout = 1`, pgx.QuerySimpleProtocol(true))
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	/*
+		Because different parameters require different lock types, and can't know for
+		sure what the highest level lock we need is (may change between database releases),
+		each alter statement could potentially block. So we have to set a new timeout for
+		each one, and fail the whole operation if we reach our deadline.
+	*/
+	var timeoutduration time.Duration
+	var deadline time.Time
+	if waitmode == WaitModeWait && timeout > 0 {
+		timeoutduration = time.Duration(timeout * float64(time.Second))
+		deadline = time.Now().Add(timeoutduration)
+	}
+
+	// Now we cycle through the table options and try to set each one
+	sortedkeys := make([]string, 0, len(match.Options))
+	for key := range match.Options {
+		sortedkeys = append(sortedkeys, key)
+	}
+	sort.Strings(sortedkeys)
+	for _, val := range sortedkeys {
+		var altersql string
+		if match.Options[val].NewSetting == nil {
+			altersql = fmt.Sprintf("alter materialized view %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
+		} else if match.Options[val].OldSetting == nil {
+			altersql = fmt.Sprintf("alter materialized view %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+		} else {
+			altersql = fmt.Sprintf("alter materialized view %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+		}
+		tx2, err := tx.Begin(bgctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if waitmode == WaitModeWait && timeout > 0 {
+			remaining := time.Until(deadline).Milliseconds()
+			if remaining > 0 {
+				// lock_timeout for next alter is time remaining until deadline
+				_, err = tx2.Exec(bgctx, fmt.Sprintf("set lock_timeout = %d", remaining), pgx.QuerySimpleProtocol(true))
+			} else {
+				// don't wait anymore - any further lock timeouts cause failure
+				_, err = tx2.Exec(bgctx, "set lock_timeout = 1", pgx.QuerySimpleProtocol(true))
+			}
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+		_, err = tx2.Exec(bgctx, altersql, pgx.QuerySimpleProtocol(true))
+		if err != nil {
+			var pgerr *pgconn.PgError
+			if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
+				// we fail the whole operation in this case - rollback main transaction
+				rberr := tx.Rollback(bgctx)
+				if rberr != nil {
+					log.Fatal(rberr)
+				}
+				// return an empty result
+				result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, 0)}
+				if waitmode == WaitModeNowait {
+					// we were blocked in nowait mode
+					return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
+				} else {
+					// our timeout expired
+					return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
+				}
+			}
+
+			/*
+				If we got to here, we didn't timeout, we just failed to set the parameter.
+				Rollback to the savepoint, record the error in result, and proceed.
+			*/
+			rberr := tx2.Rollback(bgctx)
+			if rberr != nil {
+				log.Fatal(rberr)
+			}
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false, Err: err})
+		} else {
+			// we succeeded in setting the parameter, so release the savepoint
 			err = tx2.Commit(bgctx)
 			if err != nil {
 				log.Fatal(err)
