@@ -11,9 +11,7 @@ import "github.com/jackc/pgerrcode"
 import "github.com/jackc/pgx/v4"
 import "github.com/jlucasdba/pgvacman/queries"
 import log "github.com/sirupsen/logrus"
-import "regexp"
 import "sort"
-import "strings"
 import "time"
 
 const (
@@ -286,123 +284,6 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		return result, nil
 	}
 
-	// Materialized views can't be exlicitly locked, which means handling them needs a different approach
-	if match.Relkind == 'm' {
-		return i.updateMaterializedViewOptions(match, waitmode, timeout)
-	}
-
-	/*
-		Nearly all storage parameters don't actually require access exclusive
-		lock - if we are only setting such parameters, we can use a less
-		restrictive share update exclusive lock.
-		We evaluate whether we only have such parameters with a regexp.
-		It's possible this list could change in a future postgres release - if
-		it does, a more aggressive lock than was necessary might be requested
-		for any new parameters not matching the regexp, or an insufficient lock
-		might be requested for a new parameter that does match.
-	*/
-	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
-	if err != nil {
-		log.Panic(err)
-	}
-	usesharelock := true
-	for key := range match.Options {
-		if !sharelockre.MatchString(key) {
-			usesharelock = false
-		}
-	}
-
-	var locksql string
-	{
-		lockmode := "access exclusive"
-		if usesharelock {
-			lockmode = "share update exclusive"
-		}
-		lockwait := ""
-		if waitmode == WaitModeNowait {
-			lockwait = " nowait"
-		}
-		locksql = fmt.Sprintf("lock table %s in %s mode%s", match.QuotedFullName, lockmode, lockwait)
-	}
-
-	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
-	if err != nil {
-		return result, err
-	}
-
-	// we only need to set timeout in wait mode, and if timeout is greater than zero
-	if waitmode == WaitModeWait && timeout > 0 {
-		_, err = tx.Exec(bgctx, fmt.Sprintf(`set lock_timeout = %s`, pgx.QuerySimpleProtocol(true), pgx.Identifier{fmt.Sprintf(`%fs`, timeout)}.Sanitize()))
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	_, err = tx.Exec(bgctx, locksql)
-	if err != nil {
-		rberr := tx.Rollback(bgctx)
-		if rberr != nil {
-			log.Fatal(rberr)
-		}
-		var pgerr *pgconn.PgError
-		if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable && !strings.Contains(pgerr.Error(), "timeout") {
-			return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
-		} else if errors.As(err, &pgerr) && pgerr.Code == pgerrcode.LockNotAvailable {
-			return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s (wait timed out)", match.QuotedFullName), err}
-		} else {
-			return result, err
-		}
-	}
-
-	// Now we cycle through the table options and try to set each one
-	sortedkeys := make([]string, 0, len(match.Options))
-	for key := range match.Options {
-		sortedkeys = append(sortedkeys, key)
-	}
-	sort.Strings(sortedkeys)
-	for _, val := range sortedkeys {
-		var altersql string
-		if match.Options[val].NewSetting == nil {
-			altersql = fmt.Sprintf("alter table %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
-		} else if match.Options[val].OldSetting == nil {
-			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
-		} else {
-			altersql = fmt.Sprintf("alter table %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
-		}
-		tx2, err := tx.Begin(bgctx)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_, err = tx2.Exec(bgctx, altersql, pgx.QuerySimpleProtocol(true))
-		if err != nil {
-			rberr := tx2.Rollback(bgctx)
-			if rberr != nil {
-				log.Fatal(rberr)
-			}
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false, Err: err})
-		} else {
-			err = tx2.Commit(bgctx)
-			if err != nil {
-				log.Fatal(err)
-			}
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
-		}
-	}
-
-	err = tx.Commit(bgctx)
-	if err != nil {
-		rberr := tx.Rollback(bgctx)
-		if rberr != nil {
-			log.Fatal(rberr)
-		}
-		return result, err
-	}
-	return result, nil
-}
-
-func (i *DBInterface) updateMaterializedViewOptions(match TableMatch, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
-	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, len(match.Options))}
-
 	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
 	if err != nil {
 		return result, err
@@ -429,6 +310,17 @@ func (i *DBInterface) updateMaterializedViewOptions(match TableMatch, waitmode i
 		deadline = time.Now().Add(timeoutduration)
 	}
 
+	// string specifying if this is a table or materialized view
+	var objecttype string
+	switch match.Relkind {
+	case 'r':
+		objecttype = "table"
+	case 'm':
+		objecttype = "materialized view"
+	default:
+		log.Fatal(errors.New(fmt.Sprintf("unrecognized relkind %c from database for %s", match.Relkind, match.QuotedFullName)))
+	}
+
 	// Now we cycle through the table options and try to set each one
 	sortedkeys := make([]string, 0, len(match.Options))
 	for key := range match.Options {
@@ -438,11 +330,11 @@ func (i *DBInterface) updateMaterializedViewOptions(match TableMatch, waitmode i
 	for _, val := range sortedkeys {
 		var altersql string
 		if match.Options[val].NewSetting == nil {
-			altersql = fmt.Sprintf("alter materialized view %s reset (%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize())
+			altersql = fmt.Sprintf("alter %s %s reset (%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize())
 		} else if match.Options[val].OldSetting == nil {
-			altersql = fmt.Sprintf("alter materialized view %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		} else {
-			altersql = fmt.Sprintf("alter materialized view %s set (%s=%s)", match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
 		}
 		tx2, err := tx.Begin(bgctx)
 		if err != nil {
