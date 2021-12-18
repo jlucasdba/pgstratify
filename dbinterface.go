@@ -291,10 +291,16 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 		return i.updateMaterializedViewOptions(match, waitmode, timeout)
 	}
 
-	// Nearly all storage parameters don't actually require access
-	// exclusive lock - if we are only setting such parameters, we
-	// can use a less restrictive share update exclusive lock.
-	// We evaluate whether we only have such parameters with a regexp.
+	/*
+		Nearly all storage parameters don't actually require access exclusive
+		lock - if we are only setting such parameters, we can use a less
+		restrictive share update exclusive lock.
+		We evaluate whether we only have such parameters with a regexp.
+		It's possible this list could change in a future postgres release - if
+		it does, a more aggressive lock than was necessary might be requested
+		for any new parameters not matching the regexp, or an insufficient lock
+		might be requested for a new parameter that does match.
+	*/
 	sharelockre, err := regexp.Compile(`autovacuum|(?:toast\.|^)(?:vacuum_|toast_|fillfactor$|parallel_workers$)`)
 	if err != nil {
 		log.Panic(err)
