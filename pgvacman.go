@@ -146,10 +146,15 @@ func (rslt *UpdateTableOptionsResult) OutputResult() {
 		}
 	}
 
+	objecttype, err := rslt.Match.RelkindString()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if anyfailed {
-		log.Warnf("Table %s:", rslt.Match.QuotedFullName)
+		log.Warnf("%s %s:", objecttype, rslt.Match.QuotedFullName)
 	} else {
-		log.Infof("Table %s:", rslt.Match.QuotedFullName)
+		log.Infof("%s %s:", objecttype, rslt.Match.QuotedFullName)
 	}
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
