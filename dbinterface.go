@@ -112,6 +112,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 	type Matchgroup struct {
 		SchemaRE string `json:"schemare"`
 		TableRE  string `json:"tablere"`
+		OwnerRE  string `json:"ownerre"`
 		Ruleset  string `json:"ruleset"`
 	}
 
@@ -127,7 +128,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 	// Build data structures to be dumped to json for query input
 	matchgroupsfordb := make([]Matchgroup, 0, len(matchconfig))
 	for _, val := range matchconfig {
-		matchgroupsfordb = append(matchgroupsfordb, Matchgroup{SchemaRE: val.Schema, TableRE: val.Table, Ruleset: val.Ruleset})
+		matchgroupsfordb = append(matchgroupsfordb, Matchgroup{SchemaRE: val.Schema, TableRE: val.Table, OwnerRE: val.Owner, Ruleset: val.Ruleset})
 	}
 	rulesetsfordb := make(map[string]Ruleset, len(rulesetconfig))
 	for key, val := range rulesetconfig {

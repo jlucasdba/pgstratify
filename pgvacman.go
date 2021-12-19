@@ -34,6 +34,7 @@ type ConfigRuleset []ConfigRule
 type ConfigMatchgroup struct {
 	Schema  string `yaml:"schema"`
 	Table   string `yaml:"table"`
+	Owner   string `yaml:"owner"`
 	Ruleset string `yaml:"ruleset"`
 }
 

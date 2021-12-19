@@ -4,8 +4,8 @@ package queries
 
 const TablesTempTab string = `create temporary table tables as
 with matchjsonin as (select $1::jsonb as matchjsonin),
-	tables_sub1 as (select row_number() over () as tablematchnum, schemare, tablere, ruleset from (select jsonb_array_elements(matchjsonin)->>'schemare' as schemare, jsonb_array_elements(matchjsonin)->>'tablere' as tablere, jsonb_array_elements(matchjsonin)->>'ruleset' as ruleset from matchjsonin) tables_sub1a),
-tables as (select tablematchnum, reloid, relnamespace, relname, reltuples, relkind, ruleset from (select ts1.tablematchnum, c.oid as reloid, c.relnamespace::regnamespace::text as relnamespace, c.relname, min(ts1.tablematchnum) over (partition by c.relnamespace, c.relname) as mintablematchnum, c.reltuples, c.relkind, ts1.ruleset from pg_class c join tables_sub1 ts1 on c.relnamespace::regnamespace::text ~ ts1.schemare and c.relname ~ ts1.tablere where c.relpersistence='p' and c.relkind in ('r','m')) tables_a where tablematchnum = mintablematchnum)
+	tables_sub1 as (select row_number() over () as tablematchnum, schemare, tablere, ownerre, ruleset from (select jsonb_array_elements(matchjsonin)->>'schemare' as schemare, jsonb_array_elements(matchjsonin)->>'tablere' as tablere, jsonb_array_elements(matchjsonin)->>'ownerre' as ownerre, jsonb_array_elements(matchjsonin)->>'ruleset' as ruleset from matchjsonin) tables_sub1a),
+tables as (select tablematchnum, reloid, relnamespace, relname, reltuples, relkind, ruleset from (select ts1.tablematchnum, c.oid as reloid, c.relnamespace::regnamespace::text as relnamespace, c.relname, min(ts1.tablematchnum) over (partition by c.relnamespace, c.relname) as mintablematchnum, c.reltuples, c.relkind, ts1.ruleset from pg_class c join tables_sub1 ts1 on c.relnamespace::regnamespace::text ~ ts1.schemare and c.relname ~ ts1.tablere and c.relowner::regrole::text ~ ts1.ownerre where c.relpersistence='p' and c.relkind in ('r','m')) tables_a where tablematchnum = mintablematchnum)
 select * from tables`
 
 const TablesTempTabPK string = `alter table pg_temp.tables add constraint pk_tables primary key (tablematchnum, reloid)`
