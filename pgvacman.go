@@ -53,6 +53,8 @@ type TableMatch struct {
 	Relkind        rune
 	QuotedFullName string
 	Reltuples      int
+	MatchgroupNum  int
+	Matchgroup     *ConfigMatchgroup
 	Options        map[string]TableMatchOption
 }
 
