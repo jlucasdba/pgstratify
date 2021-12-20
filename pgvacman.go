@@ -99,7 +99,7 @@ func MatchDisplay(tms []TableMatch) {
 			log.Infof(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s"`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner)
 			lastgroup = tms[val].MatchgroupNum
 		}
-		log.Infof(`  %-6s %-40s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Reltuples)
+		log.Infof(`  %-6s %-40s %-16s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
 	}
 }
 
