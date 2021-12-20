@@ -53,6 +53,7 @@ type TableMatch struct {
 	Reloid         int
 	Relkind        rune
 	QuotedFullName string
+	Owner          string
 	Reltuples      int
 	MatchgroupNum  int
 	Matchgroup     *ConfigMatchgroup
