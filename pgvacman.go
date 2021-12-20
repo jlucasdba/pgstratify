@@ -11,6 +11,7 @@ import "golang.org/x/term"
 import "gopkg.in/yaml.v2"
 import "os"
 import "regexp"
+import "sort"
 import "strings"
 import "sync"
 import "time"
@@ -66,6 +67,38 @@ func (tm *TableMatch) RelkindString() (string, error) {
 		return "Materialized View", nil
 	default:
 		return *new(string), errors.New(fmt.Sprintf("unrecognized relkind %c from database for %s", tm.Relkind, tm.QuotedFullName))
+	}
+}
+
+func MatchDisplay(tms []TableMatch) {
+	sortidx := make([]int, len(tms))
+	for i := 0; i < len(sortidx); i++ {
+		sortidx[i] = i
+	}
+
+	// Not totally happy with this sorting logic, but it works
+	sort.SliceStable(sortidx, func(i, j int) bool {
+		if tms[i].MatchgroupNum == tms[j].MatchgroupNum {
+			if tms[i].Reltuples == tms[j].Reltuples {
+				return tms[i].QuotedFullName < tms[j].QuotedFullName
+			}
+			return tms[i].Reltuples > tms[j].Reltuples
+		}
+		return tms[i].MatchgroupNum < tms[j].MatchgroupNum
+	})
+
+	objtype := map[rune]string{'r': "TABLE", 'm': "MVIEW"}
+
+	lastgroup := 0
+	for _, val := range sortidx {
+		if tms[val].MatchgroupNum != lastgroup {
+			if lastgroup != 0 {
+				log.Info("")
+			}
+			log.Infof(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s"`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner)
+			lastgroup = tms[val].MatchgroupNum
+		}
+		log.Infof(`  %-6s %-40s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Reltuples)
 	}
 }
 
@@ -185,6 +218,7 @@ Usage:
   %s [OPTION] ... [RULEFILE]
 
 Options:
+      --display-matches           take no action, and display what tables matched each matchgroup
   -n, --dry-run                   output what would be done without making changes (implies -v)
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
       --lock-timeout=NUM          per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode)
@@ -220,6 +254,7 @@ func main() {
 
 	var connectoptions ConnectOptions
 
+	opt_display_matches := getopt.BoolLong("display-matches", 0)
 	opt_dry_run := getopt.BoolLong("dry-run", 'n')
 	opt_jobs := getopt.IntLong("jobs", 'j', 1)
 	opt_lock_timeout := new(float64)
@@ -306,6 +341,13 @@ func main() {
 	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// in display-matches mode, we output the matches here and then exit
+	if *opt_display_matches {
+		log.SetLevel(log.InfoLevel)
+		MatchDisplay(tablematches)
+		os.Exit(0)
 	}
 
 	// allocate db connections up to *opt_jobs (or len(tablematches), whichever is less)
