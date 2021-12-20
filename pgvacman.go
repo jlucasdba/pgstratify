@@ -52,6 +52,7 @@ type TableMatch struct {
 	Reloid         int
 	Relkind        rune
 	QuotedFullName string
+	Reltuples      int
 	Options        map[string]TableMatchOption
 }
 
@@ -153,9 +154,9 @@ func (rslt *UpdateTableOptionsResult) OutputResult() {
 	}
 
 	if anyfailed {
-		log.Warnf("%s %s:", objecttype, rslt.Match.QuotedFullName)
+		log.Warnf("%s %s [%d rows]:", objecttype, rslt.Match.QuotedFullName, rslt.Match.Reltuples)
 	} else {
-		log.Infof("%s %s:", objecttype, rslt.Match.QuotedFullName)
+		log.Infof("%s %s [%d rows]:", objecttype, rslt.Match.QuotedFullName, rslt.Match.Reltuples)
 	}
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
