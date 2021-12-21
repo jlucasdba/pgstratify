@@ -90,6 +90,7 @@ func MatchDisplay(tms []TableMatch) {
 	})
 
 	objtype := map[rune]string{'r': "TABLE", 'm': "MVIEW"}
+	csmap := map[bool]rune{true: 't', false: 'f'}
 
 	lastgroup := 0
 	for _, val := range sortidx {
@@ -97,7 +98,7 @@ func MatchDisplay(tms []TableMatch) {
 			if lastgroup != 0 {
 				log.Info("")
 			}
-			log.Infof(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s"`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner)
+			log.Infof(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s", CaseSensitive: %c`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner, csmap[tms[val].Matchgroup.CaseSensitive])
 			lastgroup = tms[val].MatchgroupNum
 		}
 		log.Infof(`  %-6s %-40s %-16s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
