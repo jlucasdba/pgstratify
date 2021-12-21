@@ -163,6 +163,10 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		option update, with all the effective new settings. Note that if a table
 		matches a section, but does not match any rules within it, it will still not
 		match subsequent sections.
+
+		In old versions this was all one giant query, but performance was inconsistent.
+		Building the temp tables lets us gather stats (very helpful) and build indexes
+		(dubiously helpful), at the cost of a litte extra work.
 	*/
 	tx, err := i.conn.BeginTx(bgctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadWrite, DeferrableMode: pgx.NotDeferrable})
 	if err != nil {
