@@ -33,10 +33,11 @@ type ConfigRule struct {
 type ConfigRuleset []ConfigRule
 
 type ConfigMatchgroup struct {
-	Schema  string `yaml:"schema"`
-	Table   string `yaml:"table"`
-	Owner   string `yaml:"owner"`
-	Ruleset string `yaml:"ruleset"`
+	Schema        string `yaml:"schema"`
+	Table         string `yaml:"table"`
+	Owner         string `yaml:"owner"`
+	CaseSensitive bool   `yaml:"case_sensitive"`
+	Ruleset       string `yaml:"ruleset"`
 }
 
 type ConfigFile struct {
