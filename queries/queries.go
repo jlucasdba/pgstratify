@@ -25,7 +25,7 @@ select ruleset, rulenum, minrows from pg_temp.rulesets_sub`
 const RulesetsTempTabPK string = `alter table pg_temp.rulesets add constraint pk_rulesets primary key (ruleset, rulenum)`
 
 const RulesetsSettingsTempTab string = `create temporary table rulesets_settings as
-select ruleset, rulenum, minrows, parameter, settingsjson->>parameter as setting from (select ruleset, rulenum, minrows, settingsjson, jsonb_object_keys(settingsjson) as parameter from pg_temp.rulesets_sub) sub`
+select ruleset, rulenum, parameter, settingsjson->>parameter as setting from (select ruleset, rulenum, settingsjson, jsonb_object_keys(settingsjson) as parameter from pg_temp.rulesets_sub) sub`
 
 const RulesetsSettingsTempTabPK string = `alter table pg_temp.rulesets_settings add constraint pk_rulesets_settings primary key (ruleset, rulenum, parameter) include (setting)`
 
