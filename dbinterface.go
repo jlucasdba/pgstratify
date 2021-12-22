@@ -206,7 +206,12 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		return nil, err
 	}
 
-	_, err = tx.Exec(bgctx, queries.RulesetsTempTab, rulesetsfordbjson)
+	_, err = tx.Exec(bgctx, queries.RulesetsSubTempTab, rulesetsfordbjson)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(bgctx, queries.RulesetsTempTab)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +220,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		return nil, err
 	}
 
-	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTab, rulesetsfordbjson)
+	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTab)
 	if err != nil {
 		return nil, err
 	}

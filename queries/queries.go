@@ -14,19 +14,18 @@ select reloid, reloptions[1] as parameter, reloptions[2] as setting from (select
 
 const TableOptionsTempTabPK string = `alter table pg_temp.tableoptions add constraint pk_tableoptions primary key (reloid, parameter) include (setting)`
 
-const RulesetsTempTab string = `create temporary table rulesets as
+const RulesetsSubTempTab string = `create temporary table rulesets_sub as
 with rulesetsjsonin as (select $1::jsonb as rulesetsjsonin),
-rulesets_sub1 as (select key as ruleset, value from jsonb_each((select rulesetsjsonin from rulesetsjsonin))),
-rulesets_sub2 as (select ruleset, row_number() over (partition by ruleset) as rulenum, minrows, settingsjson from (select ruleset, (value->>'minrows')::bigint as minrows, value->'settings' as settingsjson from (select ruleset, jsonb_array_elements(value) as value from rulesets_sub1) rulesets_sub2a) rulesets_sub2b)
-select ruleset, rulenum, minrows from rulesets_sub2`
+rulesets_sub1 as (select key as ruleset, value from jsonb_each((select rulesetsjsonin from rulesetsjsonin)))
+select ruleset, row_number() over (partition by ruleset) as rulenum, minrows, settingsjson from (select ruleset, (value->>'minrows')::bigint as minrows, value->'settings' as settingsjson from (select ruleset, jsonb_array_elements(value) as value from rulesets_sub1) sub_a) sub_b`
+
+const RulesetsTempTab string = `create temporary table rulesets as
+select ruleset, rulenum, minrows from pg_temp.rulesets_sub`
 
 const RulesetsTempTabPK string = `alter table pg_temp.rulesets add constraint pk_rulesets primary key (ruleset, rulenum)`
 
 const RulesetsSettingsTempTab string = `create temporary table rulesets_settings as
-with rulesetsjsonin as (select $1::jsonb as rulesetsjsonin),
-rulesets_sub1 as (select key as ruleset, value from jsonb_each((select rulesetsjsonin from rulesetsjsonin))),
-rulesets_sub2 as (select ruleset, row_number() over (partition by ruleset) as rulenum, minrows, settingsjson from (select ruleset, (value->>'value')::bigint as minrows, value->'settings' as settingsjson from (select ruleset, jsonb_array_elements(value) as value from rulesets_sub1) rulesets_sub2a) rulesets_sub2b)
-select ruleset, rulenum, minrows, parameter, settingsjson->>parameter as setting from (select ruleset, rulenum, minrows, settingsjson, jsonb_object_keys(settingsjson) as parameter from rulesets_sub2) rulesets_sub3a`
+select ruleset, rulenum, minrows, parameter, settingsjson->>parameter as setting from (select ruleset, rulenum, minrows, settingsjson, jsonb_object_keys(settingsjson) as parameter from pg_temp.rulesets_sub) sub`
 
 const RulesetsSettingsTempTabPK string = `alter table pg_temp.rulesets_settings add constraint pk_rulesets_settings primary key (ruleset, rulenum, parameter) include (setting)`
 
