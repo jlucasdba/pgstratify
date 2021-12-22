@@ -22,7 +22,7 @@ select ruleset, row_number() over (partition by ruleset) as rulenum, minrows, se
 const RulesetsTempTab string = `create temporary table rulesets as
 select ruleset, rulenum, minrows from pg_temp.rulesets_sub`
 
-const RulesetsTempTabPK string = `alter table pg_temp.rulesets add constraint pk_rulesets primary key (ruleset, rulenum)`
+const RulesetsTempTabPK string = `alter table pg_temp.rulesets add constraint pk_rulesets primary key (ruleset, rulenum) include (minrows)`
 
 const RulesetsSettingsTempTab string = `create temporary table rulesets_settings as
 select ruleset, rulenum, parameter, settingsjson->>parameter as setting from (select ruleset, rulenum, settingsjson, jsonb_object_keys(settingsjson) as parameter from pg_temp.rulesets_sub) sub`
