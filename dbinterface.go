@@ -180,55 +180,61 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		}
 	}()
 
-	_, err = tx.Exec(bgctx, queries.TablesTempTab, matchgroupsfordbjson)
-	if err != nil {
-		return nil, err
+	/*
+		Batch up the temp table creation statements for fewer roundtrips.
+		Unfortunately they can't be all in the same batch because SELECT
+		apparently can't reference tables created in the same batch.
+		But we batch up as many as we can.
+	*/
+	var b pgx.Batch
+
+	b.Queue(queries.TablesTempTab, matchgroupsfordbjson)
+	b.Queue(queries.TablesTempTabPK)
+	b.Queue(`analyze pg_temp.tables`)
+
+	bresult := tx.SendBatch(bgctx, &b)
+	for i := 0; i < b.Len(); i++ {
+		_, err := bresult.Exec()
+		if err != nil {
+			bresult.Close()
+			return nil, err
+		}
 	}
-	_, err = tx.Exec(bgctx, queries.TablesTempTabPK)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(bgctx, `analyze pg_temp.tables`)
+	err = bresult.Close()
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = tx.Exec(bgctx, queries.TableOptionsTempTab)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(bgctx, queries.TableOptionsTempTabPK)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(bgctx, `analyze pg_temp.tableoptions`)
-	if err != nil {
-		return nil, err
-	}
-
+	/*
+		No batch for this one because no accompanying statements.
+		Because of how this table is used, it won't really benefit
+		from stats or an index.
+	*/
 	_, err = tx.Exec(bgctx, queries.RulesetsSubTempTab, rulesetsfordbjson)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = tx.Exec(bgctx, queries.RulesetsTempTab)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(bgctx, queries.RulesetsTempTabPK)
-	if err != nil {
-		return nil, err
-	}
+	b = *new(pgx.Batch)
 
-	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTab)
-	if err != nil {
-		return nil, err
+	b.Queue(queries.TableOptionsTempTab)
+	b.Queue(queries.TableOptionsTempTabPK)
+	b.Queue(`analyze pg_temp.tableoptions`)
+	b.Queue(queries.RulesetsTempTab)
+	b.Queue(queries.RulesetsTempTabPK)
+	b.Queue(queries.RulesetsSettingsTempTab)
+	b.Queue(queries.RulesetsSettingsTempTabPK)
+	b.Queue(`analyze pg_temp.rulesets, pg_temp.rulesets_settings`)
+
+	bresult = tx.SendBatch(bgctx, &b)
+	for i := 0; i < b.Len(); i++ {
+		_, err := bresult.Exec()
+		if err != nil {
+			bresult.Close()
+			return nil, err
+		}
 	}
-	_, err = tx.Exec(bgctx, queries.RulesetsSettingsTempTabPK)
-	if err != nil {
-		return nil, err
-	}
-	_, err = tx.Exec(bgctx, `analyze pg_temp.rulesets, pg_temp.rulesets_settings`)
+	bresult.Close()
 	if err != nil {
 		return nil, err
 	}
