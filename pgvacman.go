@@ -178,6 +178,34 @@ func (co *ConnectOptions) PromptPassword() error {
 	}
 }
 
+type RunStats struct {
+	TablesMatched       int
+	MViewsMatched       int
+	ParametersMatched   int
+	ParametersAttempted int
+	ParametersSet       int
+	ParametersErrored   int
+	accessLock          sync.Mutex
+}
+
+// update the paramter stats - this method will be accessed from goroutines so it needs a mutex
+func (rs *RunStats) UpdateFromResult(result *UpdateTableOptionsResult) {
+	rs.accessLock.Lock()
+	defer rs.accessLock.Unlock()
+	for _, val := range result.SettingSuccess {
+		rs.ParametersAttempted++
+		if val.Success {
+			rs.ParametersSet++
+		} else {
+			rs.ParametersErrored++
+		}
+	}
+}
+
+func (rs *RunStats) OutputStats() {
+	log.Warnf("%d Objects Matched, %d Parameters Modified, %d Parameter Errors", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet, rs.ParametersErrored)
+}
+
 func (rslt *UpdateTableOptionsResult) OutputResult() {
 	anyfailed := false
 	for _, val := range rslt.SettingSuccess {
@@ -346,6 +374,20 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// populate run stats
+	var runstats RunStats
+	for _, val := range tablematches {
+		switch val.Relkind {
+		case 'r':
+			runstats.TablesMatched++
+		case 'm':
+			runstats.MViewsMatched++
+		}
+		for _, _ = range val.Options {
+			runstats.ParametersMatched++
+		}
+	}
+
 	// in display-matches mode, we output the matches here and then exit
 	if *opt_display_matches {
 		log.SetLevel(log.InfoLevel)
@@ -447,6 +489,8 @@ func main() {
 					rslt.OutputResult()
 					outmutex.Unlock()
 				}
+				// record result stats - mutex synchronized internally
+				runstats.UpdateFromResult(&rslt)
 			}
 			close(donechan)
 		}(val, lockpendingrcv, donechan)
@@ -531,6 +575,8 @@ func main() {
 					rslt.OutputResult()
 					outmutex.Unlock()
 				}
+				// record result stats - mutex synchronized internally
+				runstats.UpdateFromResult(&rslt)
 			}
 			close(donechan)
 			// close the connection when we're done as well
