@@ -517,6 +517,7 @@ func main() {
 				val.Close()
 			}
 		}
+		runstats.OutputStats()
 		os.Exit(0)
 	}
 
@@ -589,5 +590,6 @@ func main() {
 		<-donechan
 	}
 
+	runstats.OutputStats()
 	os.Exit(0)
 }
