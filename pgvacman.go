@@ -206,6 +206,10 @@ func (rs *RunStats) OutputStats() {
 	log.Warnf("%d Objects Matched, %d Parameters Modified, %d Parameter Errors", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet, rs.ParametersErrored)
 }
 
+func (rs *RunStats) OutputStatsDryRun() {
+	log.Warnf("%d Objects Matched, %d Parameters Modified (Dry-Run)", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet)
+}
+
 func (rslt *UpdateTableOptionsResult) OutputResult() {
 	anyfailed := false
 	for _, val := range rslt.SettingSuccess {
@@ -517,7 +521,11 @@ func main() {
 				val.Close()
 			}
 		}
-		runstats.OutputStats()
+		if *opt_dry_run {
+			runstats.OutputStatsDryRun()
+		} else {
+			runstats.OutputStats()
+		}
 		os.Exit(0)
 	}
 
