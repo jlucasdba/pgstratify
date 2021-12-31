@@ -130,30 +130,30 @@ For each table that matched a matchgroup, it is checked against the rules in the
 ## Recommendations
 
 * Start simple. Setup a matchgroup to match all tables, and a rule to modify all tables over... say 100,000 rows. For example:
-```yaml
-matchgroups:
-  - schema: .*
-    table: .*
-    owner: .*
-    ruleset: set1
-rulesets:
-  set1:
-    - minrows: 100000
-      settings:
-        autovacuum_vacuum_threshold: 20000
-        autovacuum_vacuum_scale_factor: 0
-        autovacuum_analyze_threshold: 10000
-        autovacuum_analyze_scale_factor: 0
-    - minrows: 0
-      settings:
-        autovacuum_vacuum_threshold:
-        autovacuum_vacuum_scale_factor:
-        autovacuum_analyze_threshold:
-        autovacuum_analyze_scale_factor:
-```
-This puts a cap on the autovacuum settings. After 100,000 rows, tables will be analyzed at 10000 rows modified, and vacuumed at 20000, no matter how big they get. If any tables drop back below 100,000, they will revert to the system settings. This is a starting point. You can adjust this configuration to meet your environment's needs. What size to make the cutoff at, and what threshold to use are very environment and hardware dependent, so it's impossible to make general recommendations. If you see tables where vacuum cycles are taking longer than a few minutes to run, those might be good candidates to run more often.
+  ```yaml
+  matchgroups:
+    - schema: .*
+      table: .*
+      owner: .*
+      ruleset: set1
+  rulesets:
+    set1:
+      - minrows: 100000
+        settings:
+          autovacuum_vacuum_threshold: 20000
+          autovacuum_vacuum_scale_factor: 0
+          autovacuum_analyze_threshold: 10000
+          autovacuum_analyze_scale_factor: 0
+      - minrows: 0
+        settings:
+          autovacuum_vacuum_threshold:
+          autovacuum_vacuum_scale_factor:
+          autovacuum_analyze_threshold:
+          autovacuum_analyze_scale_factor:
+  ```
+  This puts a cap on the autovacuum settings. After 100,000 rows, tables will be analyzed at 10000 rows modified, and vacuumed at 20000, no matter how big they get. If any tables drop back below 100,000, they will revert to the system settings. This is a starting point. You can adjust this configuration to meet your environment's needs. What size to make the cutoff at, and what threshold to use are very environment and hardware dependent, so it's impossible to make general recommendations. If you see tables where vacuum cycles are taking longer than a few minutes to run, those might be good candidates to run more often.
 
-For most cases, something pretty similar to this, run every day or so, is probably sufficient.
+  For most cases, something pretty similar to this, run every day or so, is probably sufficient.
 * You don't have to set a hard threshold.  You can stick with the percentage-based approach, but create size bands to gradually decrease the percentage. At 50000 rows, lower from .2 to .18, at 100000 lower to .15, etc. As long as you run pgvacman periodically to keep the settings up to date, this is fine.
 
 ## Tips & Tricks
