@@ -16,6 +16,8 @@ import "strings"
 import "sync"
 import "time"
 
+const Version string = "0.0.1"
+
 // Define custom log formatter with very minimal output.
 // We're only really using log levels for verbosity - we
 // don't need fancy formatting.
@@ -259,6 +261,7 @@ Options:
       --lock-timeout=NUM          per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode)
       --skip-locked               skip tables that cannot be immediately locked
   -v, --verbose                   write a lot of output
+  -V, --version                   output version information, then exit
   -?, --help                      show this help, then exit
 
 Connection Options:
@@ -296,6 +299,7 @@ func main() {
 	getopt.FlagLong(opt_lock_timeout, "lock-timeout", 0)
 	opt_skip_locked := getopt.BoolLong("skip-locked", 0)
 	opt_verbose := getopt.BoolLong("verbose", 'v')
+	opt_version := getopt.BoolLong("version", 'V')
 	// handled by callback, we don't store the value
 	getopt.BoolLong("help", '?')
 	connectoptions.Host = getopt.StringLong("host", 'h', "")
@@ -308,6 +312,11 @@ func main() {
 	err := getopt.Getopt(GetoptCallback)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if *opt_version {
+		log.Warnf("pgvacman %s", Version)
+		os.Exit(0)
 	}
 
 	if *opt_jobs < 1 {
