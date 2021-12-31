@@ -28,7 +28,7 @@ rulesets:
         autovacuum_analyze_scale_factor:
 ```
 
-Matchgroups use [Postgres POSIX regular expressions](https://www.postgresql.org/docs/14/functions-matching.html#FUNCTIONS-POSIX-REGEXP) to select a set of tables. The rules in the rulesets associated with that matchgroup are then applied to that set of tables. In this simple case, we are saying "Match all tables in the public schema. For each table, if its rowcount is greater than or equal to 2000000, set these storage parameters on it. If its rowcount is greater than 0 (and less than 2000000), reset the values of the listed parameters on it."
+Matchgroups use [Postgres POSIX regular expressions](https://www.postgresql.org/docs/14/functions-matching.html#FUNCTIONS-POSIX-REGEXP) to select a set of tables. The rules in the rulesets associated with that matchgroup are then applied to that set of tables. In this simple case, we are saying "Match all tables in the public schema. For each table, if its rowcount is greater than or equal to 20000, set the given storage parameters on it. If its rowcount is greater than 0 (and less than 20000), reset the values of the listed parameters on it."
 
 You can do a dry-run of the tool against your database like this:
 `pgvacman --database mydatabase --dry-run myconfig.yaml`
