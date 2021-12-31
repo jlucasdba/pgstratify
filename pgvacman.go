@@ -352,7 +352,21 @@ func main() {
 	// parse it
 	err = yaml.UnmarshalStrict(dat, &x)
 	if err != nil {
-		log.Fatal(err)
+		/*
+			yaml.TypeError's string representation exposes implementation details,
+			like type names, so let's clean that up.
+		*/
+		x := new(yaml.TypeError)
+		if errors.As(err, &x) {
+			re, reerr := regexp.Compile(`(?m) in type .*$`)
+			if reerr != nil {
+				log.Panic(reerr)
+			}
+			errstr := re.ReplaceAllLiteralString(x.Error(), "")
+			log.Fatal(errstr)
+		} else {
+			log.Fatal(err)
+		}
 	}
 
 	// connect to the database
