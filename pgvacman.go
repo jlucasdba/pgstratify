@@ -341,7 +341,10 @@ func main() {
 	x := ConfigFile{}
 
 	// read the config file
-	dat, err := os.ReadFile("test.yml")
+	if len(getopt.Args()) != 1 {
+		log.Fatal(fmt.Errorf("rulefile name must be specified"))
+	}
+	dat, err := os.ReadFile(getopt.Args()[0])
 	if err != nil {
 		log.Fatal(err)
 	}
