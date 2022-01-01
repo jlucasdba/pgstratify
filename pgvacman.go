@@ -68,7 +68,7 @@ func (tm *TableMatch) RelkindString() (string, error) {
 	case 'm':
 		return "Materialized View", nil
 	default:
-		return *new(string), errors.New(fmt.Sprintf("unrecognized relkind %c from database for %s", tm.Relkind, tm.QuotedFullName))
+		return *new(string), fmt.Errorf("unrecognized relkind %c from database for %s", tm.Relkind, tm.QuotedFullName)
 	}
 }
 
