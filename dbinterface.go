@@ -100,6 +100,23 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
+func (i *DBInterface) CurrentDB() string {
+	var dbname string
+
+	r, err := i.conn.Query(bgctx, "select current_database()")
+	if err != nil {
+		log.Fatal(err)
+	}
+	for r.Next() {
+		err := r.Scan(&dbname)
+		if err != nil {
+			r.Close()
+			log.Fatal(err)
+		}
+	}
+	return dbname
+}
+
 func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetconfig map[string]ConfigRuleset) ([]TableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
