@@ -369,7 +369,7 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 					log.Fatal(rberr)
 				}
 				// return an empty result
-				result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, 0)}
+				result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0)}
 				if waitmode == WaitModeNowait {
 					// we were blocked in nowait mode
 					return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
