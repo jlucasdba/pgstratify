@@ -398,6 +398,8 @@ func main() {
 		}
 	}
 
+	log.Warnf(`pgvacman: updating storage parameters for database "%s"`, conn.CurrentDB())
+
 	// retrieve all the matching tables
 	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)
 	if err != nil {
