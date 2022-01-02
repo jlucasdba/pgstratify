@@ -354,15 +354,25 @@ func main() {
 	if err != nil {
 		/*
 			yaml.TypeError's string representation exposes implementation details,
-			like type names, so let's clean that up.
+			like type names, so we perform string substitution to hide that.
 		*/
 		x := new(yaml.TypeError)
 		if errors.As(err, &x) {
-			re, reerr := regexp.Compile(`(?m) in type .*$`)
+			intypere, reerr := regexp.Compile(`(?m) in type .*$`)
 			if reerr != nil {
 				log.Panic(reerr)
 			}
-			errstr := re.ReplaceAllLiteralString(x.Error(), "")
+			intore, reerr := regexp.Compile(`(?m) cannot unmarshal !!.+ ` + "`" + `(.*)` + "`" + ` .*$`)
+			if reerr != nil {
+				log.Panic(reerr)
+			}
+
+			if intore.MatchString(x.Error()) {
+				errstr := intore.ReplaceAllString(x.Error(), " invalid value `$1`")
+				log.Fatal(errstr)
+			}
+
+			errstr := intypere.ReplaceAllLiteralString(x.Error(), "")
 			log.Fatal(errstr)
 		} else {
 			log.Fatal(err)
