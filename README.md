@@ -1,6 +1,6 @@
 # pgvacman
 
-Pgvacman is a storage parameter manager for PostgreSQL. Specifically it's intended target is managing the autovacuum-related storage parameters of large tables as they grow.
+Pgvacman is a storage parameter manager for PostgreSQL. Specifically its intended target is managing the autovacuum-related storage parameters of large tables as they grow.
 
 ## Quickstart
 
@@ -50,7 +50,7 @@ The problem is that settings that work well for small tables don't really work w
 
 Postgres vacuum runs more quickly when it's run more frequently. The visibility map for each table keeps track of pages in need of vacuuming. When vacuum runs it can skip straight to these pages and bypass the clean pages. So the more pages in need of cleaning, the longer the vacuum takes. The more tuples a vacuum needs to process, the more memory it needs as well. A vacuum process starved for memory becomes even slower. This problem can snowball: tables that have a lot of activity and aren't vacuumed frequently enough become bloated. The more pages a table has, the longer it takes to scan, which leads to the next vacuum taking even longer... This can spiral out of control.
 
-Pgvacman is designed to help you maintain sane autovacuum settings for tables of different sizes, with better granularity than the system-wide settings provide. The user defines bands of table rowcounts at which different table-level storage parameters will be set.  For example, say the database wide `autovacuum_vacuum_scale_factor` is .2, but you want any tables over 5,000,000 rows to instead use a value of .02. You can define a rule for this threshold in the pgvacman config file. When it runs, pgvacman will scan the database for tables of that size and modify their storage parameters to match. If the table later shrinks (after a truncate, for example), the next pgvacman run will revert the storage parameters to a lower configured band. You can keep whatever system-wide settings you are comfortable with for average tables, and define more aggressive settings for tables that reach defined rowcount cutoffs. You can also define different rules for specific schema or table name patterns if you know your environment has specific tables with special requirements.
+Pgvacman is designed to help you maintain sane autovacuum settings for tables of different sizes, with better granularity than the system-wide settings provide. The user defines bands of table rowcounts at which different table-level storage parameters will be set.  For example, say the database-wide `autovacuum_vacuum_scale_factor` is .2, but you want any tables over 5,000,000 rows to instead use a value of .02. You can define a rule for this threshold in the pgvacman config file. When it runs, pgvacman will scan the database for tables of that size and modify their storage parameters to match. If the table later shrinks (after a truncate, for example), the next pgvacman run will revert the storage parameters to a lower configured band. You can keep whatever system-wide settings you are comfortable with for average tables, and define more aggressive settings for tables that reach defined rowcount cutoffs. You can also define different rules for specific schema or table name patterns if you know your environment has specific tables with special requirements.
 
 ## Command-line Reference
 
@@ -124,12 +124,12 @@ Database name to connect to and update.
 * ruleset: A ruleset name from the rulesets section of the configuration. This is the ruleset that will be applied to tables matching this matchgroup. Defaults to empty string, meaning no ruleset will be applied to matched tables.
 
 **rulesets:** Map of rulesets. The key for each ruleset is the ruleset name. Each ruleset consists of a list of rules. It is recommended, but not required, that the rules be specified in descending order, by their minrows value. Each rule consists of the following keys:
-* minrows: The minimum number of rows a table must contain for this rule to apply. Defaults to 0, but relying on the default is not recommended. Two rules in the same ruleset cannot use the same minrows value.
+* minrows: The minimum number of rows a table must contain for this rule to apply. Defaults to 0, but relying on the default is not recommended. Two rules in the same ruleset cannot use the same minrows value. The minrows value must be greater than or equal to 0.
 * settings: Map of storage parameters to apply for this rule. The key is the parameter name, and the value is the setting. The default is null, meaning to RESET the parameter on the table.
 
 All tables are checked against the matchgroup list in descending order. A table can match only one matchgroup - the first one for which it satisfies the matchgroup conditions. A table that has already matched a matchgroup is ignored by subsequent matchgroups.
 
-For each table that matched a matchgroup, it is checked against the rules in the correspondig ruleset. The number of rows is determined from the optimizer statistics (reltuples in pg_class, specifically). All settings from rules with minrows less than or equal to the number of rows in the table apply. If a parameter is set in more than one appplicable rule, the setting from the rule with the highest minrows value applies. (In other words, settings from higher minrows rules mask settings from lower rules.)
+For each table that matched a matchgroup, it is checked against the rules in the corresponding ruleset. The number of rows is determined from the optimizer statistics (reltuples in pg_class, specifically). All settings from rules with minrows less than or equal to the number of rows in the table apply. If a parameter is set in more than one appplicable rule, the setting from the rule with the highest minrows value applies. (In other words, settings from higher minrows rules mask settings from lower rules.)
 
 ## Recommendations
 
