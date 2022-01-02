@@ -81,6 +81,10 @@ Skip tables that cannot be immediately locked.
 
 Be more verbose about what is happening. Includes output of every table matched, what parameters are being modified, and old and new settings. Implied in dry-run mode.
 
+`-V, --version`
+
+Output version information, then exit.
+
 `-?, --help`
 
 Show help and exit.
