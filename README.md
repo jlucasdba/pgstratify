@@ -169,4 +169,4 @@ For each table that matched a matchgroup, it is checked against the rules in the
 * Rowcount isn't the only indicator that a table needs to be vacuumed more aggressively. Dirty page count (meaning pages with dead tuples) is also important in how long vacuum takes to run. Rowcount and dirty pages are related, but don't necessarily drectly correlate. The number of dirty pages is going to depend on the update pattern - it only takes one modified row to dirty a page. A table reaching a high percentage of dirty pages between vacuums probably should be vacuumed more often.
 * It's possible for even a very small table (in terms of rowcount) to become a vacuum problem if it's very heavily updated/deleted from. For cases like this you may need define a special ruleset and target specific tables by name. In really bad cases, autovacuum may not be appropriate at all, and you may need to consider having your application do its own vacuuming, or implementing a custom vacuum script or daemon specifically for the problem table.
 
-Copyright (c) 2021 James Lucas
+Copyright (c) 2022 James Lucas

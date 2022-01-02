@@ -1,4 +1,4 @@
-// Copyright (c) 2021 James Lucas
+// Copyright (c) 2022 James Lucas
 
 package main
 
