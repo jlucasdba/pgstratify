@@ -34,6 +34,31 @@ type ConfigRule struct {
 
 type ConfigRuleset []ConfigRule
 
+func (cr *ConfigRuleset) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	// can't go direct to ConfigRuleset because it will call this method again,
+	// recursing forever
+	var r []ConfigRule
+	err := unmarshal(&r)
+	if err != nil {
+		return err
+	}
+
+	if &r == nil {
+		cr = nil
+	}
+
+	m := make(map[uint64]bool)
+	for _, val := range r {
+		if m[val.Minrows] {
+			return fmt.Errorf("duplicate value `%d` found in ruleset", val.Minrows)
+		}
+		m[val.Minrows] = true
+	}
+
+	*cr = ConfigRuleset(r)
+	return err
+}
+
 type ConfigMatchgroup struct {
 	Schema        string `yaml:"schema"`
 	Table         string `yaml:"table"`
