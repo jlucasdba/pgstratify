@@ -469,7 +469,7 @@ func main() {
 		case 'm':
 			runstats.MViewsMatched++
 		}
-		for _, _ = range val.Parameters {
+		for range val.Parameters {
 			runstats.ParametersMatched++
 		}
 	}
