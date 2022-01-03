@@ -32,13 +32,16 @@ func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 	return []byte(entry.Message + "\n"), nil
 }
 
+// individual rule definition from yaml config
 type ConfigRule struct {
 	Minrows  uint64             `yaml:"minrows"`
 	Settings map[string]*string `yaml:"settings"`
 }
 
+// set of related rules
 type ConfigRuleset []ConfigRule
 
+// unmarshaling of ruleset with some additional validation (no duplicate minrows)
 func (cr *ConfigRuleset) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	// can't go direct to ConfigRuleset because it will call this method again,
 	// recursing forever
@@ -64,6 +67,7 @@ func (cr *ConfigRuleset) UnmarshalYAML(unmarshal func(interface{}) error) error 
 	return err
 }
 
+// matchgroup from yaml config
 type ConfigMatchgroup struct {
 	Schema        string `yaml:"schema"`
 	Table         string `yaml:"table"`
@@ -72,16 +76,19 @@ type ConfigMatchgroup struct {
 	Ruleset       string `yaml:"ruleset"`
 }
 
+// overall yaml config file
 type ConfigFile struct {
 	Matchgroups []ConfigMatchgroup       `yaml:"matchgroups"`
 	Rulesets    map[string]ConfigRuleset `yaml:"rulesets"`
 }
 
+// old and new settings for a table parameter
 type TableMatchParameter struct {
 	OldSetting *string
 	NewSetting *string
 }
 
+// table that matched in the database, with parameters in need of update
 type TableMatch struct {
 	Reloid         int
 	Relkind        rune
@@ -93,6 +100,7 @@ type TableMatch struct {
 	Parameters     map[string]TableMatchParameter
 }
 
+// returns correct sql type specifier for this tablematch
 func (tm *TableMatch) RelkindString() (string, error) {
 	switch tm.Relkind {
 	case 'r':
@@ -104,6 +112,7 @@ func (tm *TableMatch) RelkindString() (string, error) {
 	}
 }
 
+// given a slice of TableMatches, display them on the console for configuration debugging
 func MatchDisplay(tms []TableMatch) {
 	sortidx := make([]int, len(tms))
 	for i := 0; i < len(sortidx); i++ {
@@ -137,6 +146,7 @@ func MatchDisplay(tms []TableMatch) {
 	}
 }
 
+// database connection options
 type ConnectOptions struct {
 	Host     *string
 	Port     *int
@@ -145,7 +155,7 @@ type ConnectOptions struct {
 	DBName   *string
 }
 
-// builds a DSN from ConnectOptions
+// build a DSN from ConnectOptions
 func (co *ConnectOptions) BuildDSN() string {
 	components := make([]string, 0)
 	escaped := co.EscapeStrings()
@@ -210,6 +220,7 @@ func (co *ConnectOptions) PromptPassword() error {
 	}
 }
 
+// runtime statistics for output at end of run
 type RunStats struct {
 	TablesMatched       int
 	MViewsMatched       int
@@ -234,10 +245,12 @@ func (rs *RunStats) UpdateFromResult(result *UpdateTableParametersResult) {
 	}
 }
 
+// output the runtime stats
 func (rs *RunStats) OutputStats() {
 	log.Warnf("%d Objects Matched, %d Parameters Modified, %d Parameter Errors", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet, rs.ParametersErrored)
 }
 
+// output the runtime stats for a dry-run (different formatting)
 func (rs *RunStats) OutputStatsDryRun() {
 	log.Warnf("%d Objects Matched, %d Parameters Modified (Dry-Run)", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet)
 }

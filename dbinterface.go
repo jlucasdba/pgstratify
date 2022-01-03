@@ -20,11 +20,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// constants defining different wait behavior modes
 const (
 	WaitModeWait   = 1
 	WaitModeNowait = 2
 )
 
+// shorthand for background context
 var bgctx = context.Background()
 
 // Error indicating failure to acquire a lock
@@ -60,6 +62,7 @@ type DBInterface struct {
 	conn   *pgx.Conn
 }
 
+// Construct a DBInterface from a ConnectOptions
 func NewDBInterface(connectoptions *ConnectOptions) (*DBInterface, error) {
 	i := DBInterface{}
 	var err error
@@ -80,6 +83,7 @@ func NewDBInterface(connectoptions *ConnectOptions) (*DBInterface, error) {
 	return &i, nil
 }
 
+// close DBInterface (closes database connection)
 func (i *DBInterface) Close() {
 	i.conn.Close(bgctx)
 }
@@ -105,6 +109,7 @@ func (i *DBInterface) ListDBs() []string {
 	return datnames
 }
 
+// get current database name from the server
 func (i *DBInterface) CurrentDB() string {
 	var dbname string
 
@@ -122,6 +127,7 @@ func (i *DBInterface) CurrentDB() string {
 	return dbname
 }
 
+// given config matchgroups and rulesets, get all the matching tables in need of parameter update from the database
 func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetconfig map[string]ConfigRuleset) ([]TableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
@@ -182,11 +188,12 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		tables and applicable rules.
 
 		The result is all matching tables in the database that require at least one
-		option update, with all the effective new settings. Note that if a table
+		parameter update, with all the effective new settings. Note that if a table
 		matches a section, but does not match any rules within it, it will still not
 		match subsequent sections.
 
 		In old versions this was all one giant query, but performance was inconsistent.
+		Sometimes the query would take many seconds to run, due to choosing a bad plan.
 		Building the temp tables lets us gather stats (very helpful) and build indexes
 		(dubiously helpful), at the cost of a litte extra work.
 	*/
@@ -300,17 +307,20 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 	return tablematches, nil
 }
 
+// indicates whether setting a parameter was successful, and if not, why
 type UpdateTableParametersResultSettingSuccess struct {
 	Setting string
 	Success bool
 	Err     error
 }
 
+// the result of attempting to update parameters on a table
 type UpdateTableParametersResult struct {
 	Match          TableMatch
 	SettingSuccess []UpdateTableParametersResultSettingSuccess
 }
 
+// given a TableMatch, try to update parameters on that table
 func (i *DBInterface) UpdateTableParameters(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableParametersResult, error) {
 	result := UpdateTableParametersResult{Match: match, SettingSuccess: make([]UpdateTableParametersResultSettingSuccess, 0, len(match.Parameters))}
 
@@ -341,10 +351,11 @@ func (i *DBInterface) UpdateTableParameters(match TableMatch, dryrun bool, waitm
 	}
 
 	/*
-		Because different parameters require different lock types, and can't know for
-		sure what the highest level lock we need is (may change between database releases),
-		each alter statement could potentially block. So we have to set a new timeout for
-		each one, and fail the whole operation if we reach our deadline.
+		Because different parameters require different lock types, and we can't know for
+		sure what the highest level lock we need is (locks needed for different parameters
+		may change between database releases), each alter statement could potentially block.
+		So we have to set a new timeout for each one, and fail the whole operation if we
+		reach our deadline.
 	*/
 	var timeoutduration time.Duration
 	var deadline time.Time
@@ -360,7 +371,7 @@ func (i *DBInterface) UpdateTableParameters(match TableMatch, dryrun bool, waitm
 	}
 	objecttype = strings.ToLower(objecttype)
 
-	// Now we cycle through the table options and try to set each one
+	// now we cycle through the table options and try to set each one
 	sortedkeys := make([]string, 0, len(match.Parameters))
 	for key := range match.Parameters {
 		sortedkeys = append(sortedkeys, key)
