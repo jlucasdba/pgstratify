@@ -242,6 +242,7 @@ func (rs *RunStats) OutputStatsDryRun() {
 	log.Warnf("%d Objects Matched, %d Parameters Modified (Dry-Run)", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet)
 }
 
+// this is here instead of dbinterface file because it's user-facing output
 func (rslt *UpdateTableOptionsResult) OutputResult() {
 	anyfailed := false
 	for _, val := range rslt.SettingSuccess {
