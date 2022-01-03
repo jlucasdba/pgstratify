@@ -2,6 +2,10 @@
 
 Pgvacman is a storage parameter manager for PostgreSQL. Specifically its intended target is managing the autovacuum-related storage parameters of large tables as they grow.
 
+## Why Do I Need This?
+
+If your database is relatively small, and/or the data in your tables is very stable, you probably don't. The main use case is to update table storage parameters when rowcounts get high enough that the default percentage-based autovacuum approach starts to break down.
+
 ## Quickstart
 
 You need to create a yaml file defining what tables to operate on (matchgroups), and what parameters to update on those tables at specific rowcount thresholds (rulesets). A simple example:
@@ -37,10 +41,6 @@ When you're ready to apply the changes, you can do this:
 `pgvacman --database mydatabase --verbose myconfig.yaml`
 
 The recommended usage, once your rules are satisfactorily defined, is to schedule pgvacman to run periodically in a cron job (or some other scheduling mechanism).
-
-## Why Do I Need This?
-
-If your database is relatively small, and/or the data in your tables is very stable, you probably don't. The main use case is to update table storage parameters when rowcounts get high enough that the default percentage-based autovacuum approach starts to break down.
 
 ## Detailed Rationale
 
