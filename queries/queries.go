@@ -9,10 +9,10 @@ select tablematchnum, reloid, relnamespace, relname, owner, reltuples, relkind, 
 
 const TablesTempTabPK string = `alter table pg_temp.tables add constraint pk_tables primary key (tablematchnum, reloid)`
 
-const TableOptionsTempTab string = `create temporary table tableoptions as
-select reloid, reloptions[1] as parameter, reloptions[2] as setting from (select oid as reloid, regexp_split_to_array(unnest(reloptions),'=') as reloptions from pg_class where oid in (select reloid from pg_temp.tables)) tableoptions_a`
+const TableParametersTempTab string = `create temporary table tableparameters as
+select reloid, reloptions[1] as parameter, reloptions[2] as setting from (select oid as reloid, regexp_split_to_array(unnest(reloptions),'=') as reloptions from pg_class where oid in (select reloid from pg_temp.tables)) tableparameters_a`
 
-const TableOptionsTempTabPK string = `alter table pg_temp.tableoptions add constraint pk_tableoptions primary key (reloid, parameter) include (setting)`
+const TableParametersTempTabPK string = `alter table pg_temp.tableparameters add constraint pk_tableparameters primary key (reloid, parameter) include (setting)`
 
 const RulesetsSubTempTab string = `create temporary table rulesets_sub as
 with rulesetsjsonin as (select $1::jsonb as rulesetsjsonin),
@@ -34,5 +34,5 @@ when t.reltuples >= rs.minrows then 't'::bool
 else 'f'::bool end),
 effective_settings_sub1 as (select rm.tablematchnum, rm.rulenum, rm.reloid, rm.relnamespace, rm.relname, rm.owner, rm.reltuples, rm.relkind, rss.parameter, rss.setting from rulematch rm join pg_temp.rulesets_settings rss on rm.ruleset = rss.ruleset and rm.rulenum=rss.rulenum),
 effective_settings_sub2 as (select reloid, relnamespace, relname, owner, reltuples, relkind, tablematchnum, parameter, setting from effective_settings_sub1 where (tablematchnum, rulenum, reloid, relnamespace, relname, owner, parameter) in (select tablematchnum, max(rulenum) as rulenum, reloid, relnamespace, relname, owner, parameter from effective_settings_sub1 group by tablematchnum, reloid, relnamespace, relname, owner, parameter)),
-effective_settings as (select ess.reloid, ess.relnamespace, ess.relname, ess.owner, ess.reltuples, ess.relkind, ess.tablematchnum, ess.parameter, topt.setting as oldsetting, ess.setting as newsetting from effective_settings_sub2 ess left outer join tableoptions topt on ess.reloid=topt.reloid and ess.parameter=topt.parameter where (ess.setting is null and (ess.reloid, ess.parameter) in (select reloid, parameter from tableoptions)) or (ess.setting is not null and (ess.reloid, ess.parameter, ess.setting) not in (select reloid, parameter, setting from tableoptions)))
+effective_settings as (select ess.reloid, ess.relnamespace, ess.relname, ess.owner, ess.reltuples, ess.relkind, ess.tablematchnum, ess.parameter, tparams.setting as oldsetting, ess.setting as newsetting from effective_settings_sub2 ess left outer join tableparameters tparams on ess.reloid=tparams.reloid and ess.parameter=tparams.parameter where (ess.setting is null and (ess.reloid, ess.parameter) in (select reloid, parameter from tableparameters)) or (ess.setting is not null and (ess.reloid, ess.parameter, ess.setting) not in (select reloid, parameter, setting from tableparameters)))
 select reloid::integer, relkind, format('%I.%I',relnamespace,relname) as quotedfullname, owner, reltuples, jsonout, tablematchnum from (select reloid, relnamespace, relname, owner, reltuples, relkind, tablematchnum, json_object_agg(parameter, json_build_object('oldsetting',oldsetting,'newsetting',newsetting)) as jsonout from effective_settings group by reloid, relnamespace, relname, owner, reltuples, relkind, tablematchnum order by relnamespace, relname, owner) sub`

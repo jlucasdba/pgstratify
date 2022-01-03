@@ -239,9 +239,9 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 
 	b = *new(pgx.Batch)
 
-	b.Queue(queries.TableOptionsTempTab)
-	b.Queue(queries.TableOptionsTempTabPK)
-	b.Queue(`analyze pg_temp.tableoptions`)
+	b.Queue(queries.TableParametersTempTab)
+	b.Queue(queries.TableParametersTempTabPK)
+	b.Queue(`analyze pg_temp.tableparameters`)
 	b.Queue(queries.RulesetsTempTab)
 	b.Queue(queries.RulesetsTempTabPK)
 	b.Queue(queries.RulesetsSettingsTempTab)
@@ -287,11 +287,11 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 			r.Close()
 			return nil, err
 		}
-		tmoptions := make(map[string]TableMatchOption)
+		tmoptions := make(map[string]TableMatchParameter)
 		for key, val := range options {
-			tmoptions[key] = TableMatchOption(val)
+			tmoptions[key] = TableMatchParameter(val)
 		}
-		tablematches = append(tablematches, TableMatch{Reloid: reloid, Relkind: relkind, QuotedFullName: quotedfullname, Owner: owner, Reltuples: reltuples, MatchgroupNum: matchgroupidx, Matchgroup: &matchconfig[matchgroupidx-1], Options: tmoptions})
+		tablematches = append(tablematches, TableMatch{Reloid: reloid, Relkind: relkind, QuotedFullName: quotedfullname, Owner: owner, Reltuples: reltuples, MatchgroupNum: matchgroupidx, Matchgroup: &matchconfig[matchgroupidx-1], Parameters: tmoptions})
 	}
 	if r.Err() != nil {
 		return nil, r.Err()
@@ -300,29 +300,29 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 	return tablematches, nil
 }
 
-type UpdateTableOptionsResultSettingSuccess struct {
+type UpdateTableParametersResultSettingSuccess struct {
 	Setting string
 	Success bool
 	Err     error
 }
 
-type UpdateTableOptionsResult struct {
+type UpdateTableParametersResult struct {
 	Match          TableMatch
-	SettingSuccess []UpdateTableOptionsResultSettingSuccess
+	SettingSuccess []UpdateTableParametersResultSettingSuccess
 }
 
-func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableOptionsResult, error) {
-	result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0, len(match.Options))}
+func (i *DBInterface) UpdateTableParameters(match TableMatch, dryrun bool, waitmode int, timeout float64) (UpdateTableParametersResult, error) {
+	result := UpdateTableParametersResult{Match: match, SettingSuccess: make([]UpdateTableParametersResultSettingSuccess, 0, len(match.Parameters))}
 
 	// dryrun case is much shorter, so get it out of the way upfront
 	if dryrun {
-		sortedkeys := make([]string, 0, len(match.Options))
-		for key := range match.Options {
+		sortedkeys := make([]string, 0, len(match.Parameters))
+		for key := range match.Parameters {
 			sortedkeys = append(sortedkeys, key)
 		}
 		sort.Strings(sortedkeys)
 		for _, val := range sortedkeys {
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableParametersResultSettingSuccess{Setting: val, Success: true})
 		}
 		return result, nil
 	}
@@ -361,19 +361,19 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 	objecttype = strings.ToLower(objecttype)
 
 	// Now we cycle through the table options and try to set each one
-	sortedkeys := make([]string, 0, len(match.Options))
-	for key := range match.Options {
+	sortedkeys := make([]string, 0, len(match.Parameters))
+	for key := range match.Parameters {
 		sortedkeys = append(sortedkeys, key)
 	}
 	sort.Strings(sortedkeys)
 	for _, val := range sortedkeys {
 		var altersql string
-		if match.Options[val].NewSetting == nil {
+		if match.Parameters[val].NewSetting == nil {
 			altersql = fmt.Sprintf("alter %s %s reset (%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize())
-		} else if match.Options[val].OldSetting == nil {
-			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+		} else if match.Parameters[val].OldSetting == nil {
+			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Parameters[val].NewSetting}.Sanitize())
 		} else {
-			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Options[val].NewSetting}.Sanitize())
+			altersql = fmt.Sprintf("alter %s %s set (%s=%s)", objecttype, match.QuotedFullName, pgx.Identifier{val}.Sanitize(), pgx.Identifier{*match.Parameters[val].NewSetting}.Sanitize())
 		}
 		tx2, err := tx.Begin(bgctx)
 		if err != nil {
@@ -402,7 +402,7 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 					log.Fatal(rberr)
 				}
 				// return an empty result
-				result := UpdateTableOptionsResult{Match: match, SettingSuccess: make([]UpdateTableOptionsResultSettingSuccess, 0)}
+				result := UpdateTableParametersResult{Match: match, SettingSuccess: make([]UpdateTableParametersResultSettingSuccess, 0)}
 				if waitmode == WaitModeNowait {
 					// we were blocked in nowait mode
 					return result, &AcquireLockError{fmt.Sprintf("Unable to acquire lock on %s", match.QuotedFullName), err}
@@ -420,14 +420,14 @@ func (i *DBInterface) UpdateTableOptions(match TableMatch, dryrun bool, waitmode
 			if rberr != nil {
 				log.Fatal(rberr)
 			}
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: false, Err: err})
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableParametersResultSettingSuccess{Setting: val, Success: false, Err: err})
 		} else {
 			// we succeeded in setting the parameter, so release the savepoint
 			err = tx2.Commit(bgctx)
 			if err != nil {
 				log.Fatal(err)
 			}
-			result.SettingSuccess = append(result.SettingSuccess, UpdateTableOptionsResultSettingSuccess{Setting: val, Success: true})
+			result.SettingSuccess = append(result.SettingSuccess, UpdateTableParametersResultSettingSuccess{Setting: val, Success: true})
 		}
 	}
 

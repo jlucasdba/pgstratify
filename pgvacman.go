@@ -77,7 +77,7 @@ type ConfigFile struct {
 	Rulesets    map[string]ConfigRuleset `yaml:"rulesets"`
 }
 
-type TableMatchOption struct {
+type TableMatchParameter struct {
 	OldSetting *string
 	NewSetting *string
 }
@@ -90,7 +90,7 @@ type TableMatch struct {
 	Reltuples      int
 	MatchgroupNum  int
 	Matchgroup     *ConfigMatchgroup
-	Options        map[string]TableMatchOption
+	Parameters     map[string]TableMatchParameter
 }
 
 func (tm *TableMatch) RelkindString() (string, error) {
@@ -221,7 +221,7 @@ type RunStats struct {
 }
 
 // update the paramter stats - this method will be accessed from goroutines so it needs a mutex
-func (rs *RunStats) UpdateFromResult(result *UpdateTableOptionsResult) {
+func (rs *RunStats) UpdateFromResult(result *UpdateTableParametersResult) {
 	rs.accessLock.Lock()
 	defer rs.accessLock.Unlock()
 	for _, val := range result.SettingSuccess {
@@ -243,7 +243,7 @@ func (rs *RunStats) OutputStatsDryRun() {
 }
 
 // this is here instead of dbinterface file because it's user-facing output
-func (rslt *UpdateTableOptionsResult) OutputResult() {
+func (rslt *UpdateTableParametersResult) OutputResult() {
 	anyfailed := false
 	for _, val := range rslt.SettingSuccess {
 		if !val.Success {
@@ -263,13 +263,13 @@ func (rslt *UpdateTableOptionsResult) OutputResult() {
 	}
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
-			if rslt.Match.Options[val.Setting].NewSetting == nil {
-				log.Infof("  Reset %s (previous setting %s)", val.Setting, *rslt.Match.Options[val.Setting].OldSetting)
+			if rslt.Match.Parameters[val.Setting].NewSetting == nil {
+				log.Infof("  Reset %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].OldSetting)
 			} else {
-				if rslt.Match.Options[val.Setting].OldSetting == nil {
-					log.Infof("  Set %s to %s (previously unset)", val.Setting, *rslt.Match.Options[val.Setting].NewSetting)
+				if rslt.Match.Parameters[val.Setting].OldSetting == nil {
+					log.Infof("  Set %s to %s (previously unset)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting)
 				} else {
-					log.Infof("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Options[val.Setting].NewSetting, *rslt.Match.Options[val.Setting].OldSetting)
+					log.Infof("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting, *rslt.Match.Parameters[val.Setting].OldSetting)
 				}
 			}
 		} else {
@@ -456,7 +456,7 @@ func main() {
 		case 'm':
 			runstats.MViewsMatched++
 		}
-		for _, _ = range val.Options {
+		for _, _ = range val.Parameters {
 			runstats.ParametersMatched++
 		}
 	}
@@ -538,7 +538,7 @@ func main() {
 		donechans = append(donechans, donechan)
 		go func(conn *DBInterface, lockpendingrcv chan<- TableMatch, donechan chan<- bool) {
 			for m := range matchiter {
-				rslt, err := conn.UpdateTableOptions(m, *opt_dry_run, WaitModeNowait, 0)
+				rslt, err := conn.UpdateTableParameters(m, *opt_dry_run, WaitModeNowait, 0)
 				if err != nil {
 					var alerr *AcquireLockError
 					if errors.As(err, &alerr) {
@@ -638,7 +638,7 @@ func main() {
 						<-timer.C
 					}
 				}()
-				rslt, err := conn.UpdateTableOptions(m, false, WaitModeWait, *opt_lock_timeout)
+				rslt, err := conn.UpdateTableParameters(m, false, WaitModeWait, *opt_lock_timeout)
 				// cancel the wait - if the message fired already this does nothing
 				waitcancel()
 				if err != nil {
