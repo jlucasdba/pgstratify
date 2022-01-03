@@ -88,27 +88,6 @@ func (i *DBInterface) Close() {
 	i.conn.Close(bgctx)
 }
 
-func (i *DBInterface) ListDBs() []string {
-	datnames := make([]string, 0)
-	r, err := i.conn.Query(bgctx, "select datname from pg_database where datallowconn = 't'")
-	if err != nil {
-		log.Fatal(err)
-	}
-	for r.Next() {
-		var s string
-		err := r.Scan(&s)
-		if err != nil {
-			r.Close()
-			log.Fatal(err)
-		}
-		datnames = append(datnames, s)
-	}
-	if r.Err() != nil {
-		log.Fatal(r.Err())
-	}
-	return datnames
-}
-
 // get current database name from the server
 func (i *DBInterface) CurrentDB() string {
 	var dbname string
