@@ -51,7 +51,7 @@ func (cr *ConfigRuleset) UnmarshalYAML(unmarshal func(interface{}) error) error 
 		return err
 	}
 
-	if &r == nil {
+	if r == nil {
 		cr = nil
 	}
 
