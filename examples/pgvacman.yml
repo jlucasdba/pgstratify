@@ -1,0 +1,19 @@
+matchgroups:
+  - schema: ^public$
+    table: .*
+    owner: .*
+    ruleset: set1
+rulesets:
+  set1:
+    - minrows: 100000
+      settings:
+        autovacuum_vacuum_threshold: 20000
+        autovacuum_vacuum_scale_factor: 0
+        autovacuum_analyze_threshold: 10000
+        autovacuum_analyze_scale_factor: 0
+    - minrows: 0
+      settings:
+        autovacuum_vacuum_threshold:
+        autovacuum_vacuum_scale_factor:
+        autovacuum_analyze_threshold:
+        autovacuum_analyze_scale_factor:
