@@ -2,19 +2,24 @@
 
 package main
 
-import "context"
-import "errors"
-import "fmt"
-import "github.com/pborman/getopt/v2"
-import log "github.com/sirupsen/logrus"
-import "golang.org/x/term"
-import "gopkg.in/yaml.v2"
-import "os"
-import "regexp"
-import "sort"
-import "strings"
-import "sync"
-import "time"
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/pborman/getopt/v2"
+
+	"os"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/term"
+	"gopkg.in/yaml.v2"
+)
 
 const Version string = "0.0.1"
 

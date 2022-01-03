@@ -2,18 +2,23 @@
 
 package main
 
-import "context"
-import "encoding/json"
-import "errors"
-import "fmt"
-import "github.com/jackc/pgconn"
-import "github.com/jackc/pgerrcode"
-import "github.com/jackc/pgx/v4"
-import "github.com/jlucasdba/pgvacman/queries"
-import log "github.com/sirupsen/logrus"
-import "sort"
-import "strings"
-import "time"
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgconn"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v4"
+	"github.com/jlucasdba/pgvacman/queries"
+
+	"sort"
+	"strings"
+	"time"
+
+	log "github.com/sirupsen/logrus"
+)
 
 const (
 	WaitModeWait   = 1
