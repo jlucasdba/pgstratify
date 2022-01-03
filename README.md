@@ -40,7 +40,7 @@ You can do a dry-run of the tool against your database like this:
 When you're ready to apply the changes, you can do this:
 `pgvacman --database mydatabase --verbose myconfig.yaml`
 
-The recommended usage, once your rules are satisfactorily defined, is to schedule pgvacman to run periodically in a cron job (or some other scheduling mechanism).
+The recommended usage, once your rules are satisfactorily defined, is to schedule pgvacman to run periodically in a cron job (or some other scheduling mechanism). The example `alldbs.py` script in the `examples` directory might be helpful.
 
 ## Detailed Rationale
 
