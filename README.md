@@ -67,15 +67,15 @@ Take no action, and display what tables matched each matchgroup. Useful for debu
 Output what would be done without making changes (implies -v).
 
 `-j, --jobs=NUM`
-Use up to NUM concurrent connections to set storage parameters. This is primarily useful on busy systems where ALTER TABLE might be blocked. More connections allows more locks to be waited on simultaneously.
+Use up to NUM concurrent connections to set storage parameters. This is primarily useful on busy systems where ALTER TABLE might be blocked. More connections allows more locks to be waited on simultaneously. Doing work in parallel might also provide a small overall speedup, but ALTER TABLE is already a very quick operation.
 
 `--lock-timeout=NUM`
 
-Per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode). Wait at most this many seconds to acquire lock on a given table before giving up. If multiple connections are in use, more than one table may be waited on simultaneously.
+Per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode). Wait at most this many seconds to acquire lock on a given table before giving up and skipping that table. If multiple connections are in use, more than one table may be waited on simultaneously.
 
 `--skip-locked`
 
-Skip tables that cannot be immediately locked.
+Skip updating parameters on any tables that cannot be immediately locked.
 
 `-v, --verbose`
 
