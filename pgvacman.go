@@ -32,6 +32,30 @@ func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
 	return []byte(entry.Message + "\n"), nil
 }
 
+// custom logging hook to set output to stdout for info, debug, and trace
+type OutHook struct{}
+
+func (oh *OutHook) Levels() []log.Level {
+	return []log.Level{log.InfoLevel, log.DebugLevel, log.TraceLevel}
+}
+
+func (oh *OutHook) Fire(e *log.Entry) error {
+	log.SetOutput(os.Stdout)
+	return nil
+}
+
+// custom logging hook to set output to stderr for panic, fatal, error, and warn
+type ErrHook struct{}
+
+func (eh *ErrHook) Levels() []log.Level {
+	return []log.Level{log.PanicLevel, log.FatalLevel, log.ErrorLevel, log.WarnLevel}
+}
+
+func (eh *ErrHook) Fire(e *log.Entry) error {
+	log.SetOutput(os.Stderr)
+	return nil
+}
+
 // individual rule definition from yaml config
 type ConfigRule struct {
 	Minrows  uint64             `yaml:"minrows"`
@@ -332,7 +356,10 @@ func GetoptCallback(opt getopt.Option) bool {
 func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
-	log.SetOutput(os.Stdout)
+	// set custom hooks
+	log.AddHook(new(OutHook))
+	log.AddHook(new(ErrHook))
+	// default to Info level
 	log.SetLevel(log.InfoLevel)
 
 	var connectoptions ConnectOptions
