@@ -1,4 +1,4 @@
-module github.com/jlucasdba/pgvacman
+module github.com/jlucasdba/pgstratify
 
 go 1.17
 

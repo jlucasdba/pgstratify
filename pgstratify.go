@@ -317,7 +317,7 @@ func (rslt *UpdateTableParametersResult) OutputResult() {
 
 // display usage message, then exit with status
 func usage(status int) {
-	fmt.Printf(`pgvacman scans the database and modifies storage parameters based on rules.
+	fmt.Printf(`pgstratify scans the database and modifies storage parameters based on rules.
 
 Usage:
   %s [OPTION] ... [RULEFILE]
@@ -441,7 +441,7 @@ func main() {
 	}
 
 	if *opt_version {
-		log.Infof("pgvacman %s", Version)
+		log.Infof("pgstratify %s", Version)
 		os.Exit(0)
 	}
 
@@ -536,7 +536,7 @@ func main() {
 		}
 	}
 
-	log.Infof(`pgvacman: updating storage parameters for database "%s"`, conn.CurrentDB())
+	log.Infof(`pgstratify: updating storage parameters for database "%s"`, conn.CurrentDB())
 
 	// retrieve all the matching tables
 	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)

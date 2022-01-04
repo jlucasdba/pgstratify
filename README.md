@@ -1,6 +1,6 @@
-# pgvacman
+# pgstratify
 
-Pgvacman is a storage parameter manager for PostgreSQL. Specifically its intended target is managing the autovacuum-related storage parameters of large tables as they grow. Should work on at least Postgres 9.6+. Earlier releases may work, but haven't been evaluated.
+Pgstratify is a storage parameter manager for PostgreSQL. Specifically its intended target is managing the autovacuum-related storage parameters of large tables as they grow. Should work on at least Postgres 9.6+. Earlier releases may work, but haven't been evaluated.
 
 ## Why Do I Need This?
 
@@ -35,12 +35,12 @@ rulesets:
 Matchgroups use [Postgres POSIX regular expressions](https://www.postgresql.org/docs/14/functions-matching.html#FUNCTIONS-POSIX-REGEXP) to select a set of tables. The rules in the rulesets associated with that matchgroup are then applied to that set of tables. In this simple case, we are saying "Match all tables in the public schema. For each table, if its rowcount is greater than or equal to 20000, set the given storage parameters on it. If its rowcount is greater than 0 (and less than 20000), reset the values of the listed parameters on it."
 
 You can do a dry-run of the tool against your database like this:
-`pgvacman --database mydatabase --dry-run myconfig.yaml`
+`pgstratify --database mydatabase --dry-run myconfig.yaml`
 
 When you're ready to apply the changes, you can do this:
-`pgvacman --database mydatabase --verbose myconfig.yaml`
+`pgstratify --database mydatabase --verbose myconfig.yaml`
 
-The recommended usage, once your rules are satisfactorily defined, is to schedule pgvacman to run periodically in a cron job (or some other scheduling mechanism). The example `alldbs.py` script in the `examples` directory might be helpful.
+The recommended usage, once your rules are satisfactorily defined, is to schedule pgstratify to run periodically in a cron job (or some other scheduling mechanism). The example `alldbs.py` script in the `examples` directory might be helpful.
 
 ## Detailed Rationale
 
@@ -50,14 +50,14 @@ The problem is that settings that work well for small tables don't really work w
 
 Postgres vacuum runs more quickly when it's run more frequently. The visibility map for each table keeps track of pages in need of vacuuming. When vacuum runs it can skip straight to these pages and bypass the clean pages. So the more pages in need of cleaning, the longer the vacuum takes. The more tuples a vacuum needs to process, the more memory it needs as well. A vacuum process starved for memory becomes even slower. This problem can snowball: tables that have a lot of activity and aren't vacuumed frequently enough become bloated. The more pages a table has, the longer it takes to scan, which leads to the next vacuum taking even longer... This can spiral out of control.
 
-Pgvacman is designed to help you maintain sane autovacuum settings for tables of different sizes, with better granularity than the system-wide settings provide. The user defines bands of table rowcounts at which different table-level storage parameters will be set.  For example, say the database-wide `autovacuum_vacuum_scale_factor` is .2, but you want any tables over 5,000,000 rows to instead use a value of .02. You can define a rule for this threshold in the pgvacman config file. When it runs, pgvacman will scan the database for tables of that size and modify their storage parameters to match. If the table later shrinks (after a truncate, for example), the next pgvacman run will revert the storage parameters to a lower configured band. You can keep whatever system-wide settings you are comfortable with for average tables, and define more aggressive settings for tables that reach defined rowcount cutoffs. You can also define different rules for specific schema or table name patterns if you know your environment has specific tables with special requirements.
+Pgstratify is designed to help you maintain sane autovacuum settings for tables of different sizes, with better granularity than the system-wide settings provide. The user defines bands of table rowcounts at which different table-level storage parameters will be set.  For example, say the database-wide `autovacuum_vacuum_scale_factor` is .2, but you want any tables over 5,000,000 rows to instead use a value of .02. You can define a rule for this threshold in the pgvacman config file. When it runs, pgvacman will scan the database for tables of that size and modify their storage parameters to match. If the table later shrinks (after a truncate, for example), the next pgvacman run will revert the storage parameters to a lower configured band. You can keep whatever system-wide settings you are comfortable with for average tables, and define more aggressive settings for tables that reach defined rowcount cutoffs. You can also define different rules for specific schema or table name patterns if you know your environment has specific tables with special requirements.
 
-The simplest and most obvious strategy is to use `autovacuum_vacuum_scale_factor` for percentage-based vacuuming up to some cutoff. Once a table reaches that size, have pgvacman switch it to `autovacuum_vacuum_scale_factor=0` and set `autovacuum_vacuum_threshold` to a fixed threshold. After that, no matter how big the table gets, it will be vacuumed every *autovacuum_vacuum_threshold* modified rows. You probably also want to set the corresponding parameters for analyze.
+The simplest and most obvious strategy is to use `autovacuum_vacuum_scale_factor` for percentage-based vacuuming up to some cutoff. Once a table reaches that size, have pgstratify switch it to `autovacuum_vacuum_scale_factor=0` and set `autovacuum_vacuum_threshold` to a fixed threshold. After that, no matter how big the table gets, it will be vacuumed every *autovacuum_vacuum_threshold* modified rows. You probably also want to set the corresponding parameters for analyze.
 
 ## Command-line Reference
 
 ### Basic Usage
-  `./pgvacman [OPTION] ... [RULEFILE]`
+  `./pgstratify [OPTION] ... [RULEFILE]`
 
 ### Options:
 `--display-matches`
@@ -160,17 +160,17 @@ For each table that matched a matchgroup, it is checked against the rules in the
   This puts a cap on the autovacuum settings. After 100,000 rows, tables will be analyzed at 10000 rows modified, and vacuumed at 20000, no matter how big they get. If any tables drop back below 100,000, they will revert to the system settings. This is a starting point. You can adjust this configuration to meet your environment's needs. What size to make the cutoff at, and what threshold to use are very environment and hardware dependent, so it's impossible to make general recommendations. If you see tables where vacuum cycles are taking longer than a few minutes to run, those might be good candidates to run more often.
 
   For most cases, something pretty similar to this, run every day or so, is probably sufficient.
-* You don't have to set a hard threshold.  You can stick with the percentage-based approach, but create size bands to gradually decrease the percentage. At 50000 rows, lower from .2 to .18, at 100000 lower to .15, etc. As long as you run pgvacman periodically to keep the settings up to date, this is fine.
+* You don't have to set a hard threshold.  You can stick with the percentage-based approach, but create size bands to gradually decrease the percentage. At 50000 rows, lower from .2 to .18, at 100000 lower to .15, etc. As long as you run pgstratify periodically to keep the settings up to date, this is fine.
 
 ## Tips & Tricks
 * If you need to exclude certain tables from processing, you can put them in a matchgroup with an empty ruleset value. No assigned ruleset will mean no action taken against those tables, and once they have matched, they will be excluded from matching any later matchgroups.
 * You're not limited to just autovacuum parameters - you can also change things like `parallel_workers` for large tables if you want.
 
 ## Caveats
-* There's a tradeoff between vacuum frequency and vacuum duration. Vacuum too often and you're burning unneccessary cycles doing maintenance instead of serving queries. Vacuum too infrequently and vacuum can block needed structural changes, or get bogged down on a few large tables and never make it to the smaller tables. Pgvacman is intended to make managing these settings easier, but it's not a magic bullet.
+* There's a tradeoff between vacuum frequency and vacuum duration. Vacuum too often and you're burning unneccessary cycles doing maintenance instead of serving queries. Vacuum too infrequently and vacuum can block needed structural changes, or get bogged down on a few large tables and never make it to the smaller tables. Pgstratify is intended to make managing these settings easier, but it's not a magic bullet.
 * Rowcount isn't the only indicator that a table needs to be vacuumed more aggressively. Dirty page count (meaning pages with dead tuples) is also important in how long vacuum takes to run. Rowcount and dirty pages are related, but don't necessarily drectly correlate. The number of dirty pages is going to depend on the update pattern - it only takes one modified row to dirty a page. A table reaching a high percentage of dirty pages between vacuums probably should be vacuumed more often.
 * It's possible for even a very small table (in terms of rowcount) to become a vacuum problem if it's very heavily updated/deleted from. For cases like this you may need define a special ruleset and target specific tables by name. In really bad cases, autovacuum may not be appropriate at all, and you may need to consider having your application do its own vacuuming, or implementing a custom vacuum script or daemon specifically for the problem table.
-* Updating table storage parameters requires (briefly) acquiring a table lock. All the autovacuum-related parameters need SHARE UPDATE EXCLUSIVE, but a few other parameters need ACCESS EXCLUSIVE (check the Postgres documentation for specifics). SHARE UPDATE EXCLUSIVE is the same lock level autovacuum itself acquires, and altering storage parameters is a very quick operation. Nevertheless, you should evaluate potential conflicts between pgvacman and your ongoing operations. Table locks are only acquired when pgvacman needs to update parameters on a table.
-* On a related note, autovacuum has special behavior concerning lock contention. If a conflicting lock is requested by another session, the autovacuum will be interrupted. This means that if pgvacman needs to update storage parameters on a table currently being autovacuumed, the autovacuum run will be interrupted. This shouldn't often be a problem in practice, since storage parameters shouldn't need to be updated very frequently. But it is worth being aware of when thinking about scheduling pgvacman runs.
+* Updating table storage parameters requires (briefly) acquiring a table lock. All the autovacuum-related parameters need SHARE UPDATE EXCLUSIVE, but a few other parameters need ACCESS EXCLUSIVE (check the Postgres documentation for specifics). SHARE UPDATE EXCLUSIVE is the same lock level autovacuum itself acquires, and altering storage parameters is a very quick operation. Nevertheless, you should evaluate potential conflicts between pgstratify and your ongoing operations. Table locks are only acquired when pgstratify needs to update parameters on a table.
+* On a related note, autovacuum has special behavior concerning lock contention. If a conflicting lock is requested by another session, the autovacuum will be interrupted. This means that if pgstratify needs to update storage parameters on a table currently being autovacuumed, the autovacuum run will be interrupted. This shouldn't often be a problem in practice, since storage parameters shouldn't need to be updated very frequently. But it is worth being aware of when thinking about scheduling pgstratify runs.
 
 Copyright (c) 2022 James Lucas

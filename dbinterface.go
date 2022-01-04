@@ -11,7 +11,7 @@ import (
 	"github.com/jackc/pgconn"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v4"
-	"github.com/jlucasdba/pgvacman/queries"
+	"github.com/jlucasdba/pgstratify/queries"
 
 	"sort"
 	"strings"
