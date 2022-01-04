@@ -4,7 +4,7 @@ Pgvacman is a storage parameter manager for PostgreSQL. Specifically its intende
 
 ## Why Do I Need This?
 
-If your database is relatively small, and/or the data in your tables is very stable, you probably don't. The main use case is to update table storage parameters when rowcounts get high enough that the default percentage-based autovacuum approach starts to break down.
+If your database is relatively small, and/or the data in your tables is very stable, you probably don't. The main use case is to update table storage parameters when rowcounts get high enough that the default percentage-based autovacuum approach starts to break down. A secondary use case is in adjusting other table-level storage parameters, like `parallel_workers`, as tables grow.
 
 ## Quickstart
 
