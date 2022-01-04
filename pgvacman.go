@@ -345,14 +345,6 @@ Connection Options:
 	os.Exit(status)
 }
 
-// as soon as we encounter help flag, exit with usage
-func GetoptCallback(opt getopt.Option) bool {
-	if (opt.Name() == "-?" || opt.Name() == "--help") && opt.Seen() {
-		usage(0)
-	}
-	return true
-}
-
 func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
@@ -372,8 +364,7 @@ func main() {
 	opt_skip_locked := getopt.BoolLong("skip-locked", 0)
 	opt_verbose := getopt.BoolLong("verbose", 'v')
 	opt_version := getopt.BoolLong("version", 'V')
-	// handled by callback, we don't store the value
-	getopt.BoolLong("help", '?')
+	opt_help := getopt.BoolLong("help", '?')
 	connectoptions.Host = getopt.StringLong("host", 'h', "")
 	connectoptions.Port = getopt.IntLong("port", 'p', -1)
 	connectoptions.Username = getopt.StringLong("username", 'U', "")
@@ -381,9 +372,24 @@ func main() {
 	opt_password := getopt.BoolLong("password", 'W')
 	connectoptions.DBName = getopt.StringLong("dbname", 'd', "")
 
-	err := getopt.Getopt(GetoptCallback)
+	// as soon as we encounter help flag, exit with usage
+	// we check this first, so help takes priority over any other options
+	for _, val := range os.Args {
+		if val == "-?" || val == "--help" {
+			usage(0)
+		} else if val == "--" {
+			break
+		}
+	}
+
+	err := getopt.Getopt(nil)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	// shouldn't get here, but doesn't hurt to check
+	if *opt_help {
+		usage(0)
 	}
 
 	if *opt_version {
