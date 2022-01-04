@@ -345,6 +345,54 @@ Connection Options:
 	os.Exit(status)
 }
 
+/*
+	Getopt stops processing after the first non-option argument, which
+	is not what we want. So we work around that here.
+*/
+func GetoptGreedy(fn func(getopt.Option) bool) error {
+	breakidx := -1
+	for idx, val := range os.Args {
+		if val == "--" {
+			breakidx = idx
+			break
+		}
+	}
+	err := getopt.Getopt(fn)
+	if err != nil {
+		return err
+	}
+	if breakidx > -1 && len(getopt.Args()) <= len(os.Args)-breakidx {
+		return nil
+	}
+	keep := make([]string, 0)
+	for len(getopt.Args()) > 0 {
+		keep = append(keep, getopt.Args()[0])
+		newargs := getopt.Args()[0:]
+		breakidx := -1
+		for idx, val := range newargs {
+			if val == "--" {
+				breakidx = idx
+				break
+			}
+		}
+		err = getopt.CommandLine.Getopt(newargs, fn)
+		if err != nil {
+			return err
+		}
+		if breakidx > -1 && len(getopt.Args()) <= len(newargs)-breakidx {
+			break
+		}
+	}
+	if len(keep) > 0 {
+		keep = append(keep, getopt.Args()[0:]...)
+		err = getopt.CommandLine.Getopt(append([]string{"--"}, keep...), fn)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
@@ -382,7 +430,7 @@ func main() {
 		}
 	}
 
-	err := getopt.Getopt(nil)
+	err := GetoptGreedy(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
