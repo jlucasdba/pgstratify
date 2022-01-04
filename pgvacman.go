@@ -419,8 +419,10 @@ func main() {
 	x := ConfigFile{}
 
 	// read the config file
-	if len(getopt.Args()) != 1 {
+	if len(getopt.Args()) < 1 {
 		log.Fatal(fmt.Errorf("rulefile name must be specified"))
+	} else if len(getopt.Args()) > 1 {
+		log.Fatal(fmt.Errorf("more than one rulefile name may not be specified"))
 	}
 	dat, err := os.ReadFile(getopt.Args()[0])
 	if err != nil {
