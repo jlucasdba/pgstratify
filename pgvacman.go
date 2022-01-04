@@ -137,12 +137,12 @@ func MatchDisplay(tms []TableMatch) {
 	for _, val := range sortidx {
 		if tms[val].MatchgroupNum != lastgroup {
 			if lastgroup != 0 {
-				log.Info("")
+				log.Debug("")
 			}
-			log.Infof(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s", CaseSensitive: %c`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner, csmap[tms[val].Matchgroup.CaseSensitive])
+			log.Debugf(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s", CaseSensitive: %c`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner, csmap[tms[val].Matchgroup.CaseSensitive])
 			lastgroup = tms[val].MatchgroupNum
 		}
-		log.Infof(`  %-6s %-40s %-16s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
+		log.Debugf(`  %-6s %-40s %-16s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
 	}
 }
 
@@ -247,12 +247,12 @@ func (rs *RunStats) UpdateFromResult(result *UpdateTableParametersResult) {
 
 // output the runtime stats
 func (rs *RunStats) OutputStats() {
-	log.Warnf("%d Objects Matched, %d Parameters Modified, %d Parameter Errors", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet, rs.ParametersErrored)
+	log.Infof("%d Objects Matched, %d Parameters Modified, %d Parameter Errors", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet, rs.ParametersErrored)
 }
 
 // output the runtime stats for a dry-run (different formatting)
 func (rs *RunStats) OutputStatsDryRun() {
-	log.Warnf("%d Objects Matched, %d Parameters Modified (Dry-Run)", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet)
+	log.Infof("%d Objects Matched, %d Parameters Modified (Dry-Run)", rs.TablesMatched+rs.MViewsMatched, rs.ParametersSet)
 }
 
 // this is here instead of dbinterface file because it's user-facing output
@@ -270,19 +270,19 @@ func (rslt *UpdateTableParametersResult) OutputResult() {
 	}
 
 	if anyfailed {
-		log.Warnf("%s %s [%d rows]:", objecttype, rslt.Match.QuotedFullName, rslt.Match.Reltuples)
-	} else {
 		log.Infof("%s %s [%d rows]:", objecttype, rslt.Match.QuotedFullName, rslt.Match.Reltuples)
+	} else {
+		log.Debugf("%s %s [%d rows]:", objecttype, rslt.Match.QuotedFullName, rslt.Match.Reltuples)
 	}
 	for _, val := range rslt.SettingSuccess {
 		if val.Success {
 			if rslt.Match.Parameters[val.Setting].NewSetting == nil {
-				log.Infof("  Reset %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].OldSetting)
+				log.Debugf("  Reset %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].OldSetting)
 			} else {
 				if rslt.Match.Parameters[val.Setting].OldSetting == nil {
-					log.Infof("  Set %s to %s (previously unset)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting)
+					log.Debugf("  Set %s to %s (previously unset)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting)
 				} else {
-					log.Infof("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting, *rslt.Match.Parameters[val.Setting].OldSetting)
+					log.Debugf("  Set %s to %s (previous setting %s)", val.Setting, *rslt.Match.Parameters[val.Setting].NewSetting, *rslt.Match.Parameters[val.Setting].OldSetting)
 				}
 			}
 		} else {
@@ -333,7 +333,7 @@ func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.WarnLevel)
+	log.SetLevel(log.InfoLevel)
 
 	var connectoptions ConnectOptions
 
@@ -360,7 +360,7 @@ func main() {
 	}
 
 	if *opt_version {
-		log.Warnf("pgvacman %s", Version)
+		log.Infof("pgvacman %s", Version)
 		os.Exit(0)
 	}
 
@@ -380,7 +380,7 @@ func main() {
 	}
 
 	if *opt_verbose {
-		log.SetLevel(log.InfoLevel)
+		log.SetLevel(log.DebugLevel)
 	}
 
 	x := ConfigFile{}
@@ -453,7 +453,7 @@ func main() {
 		}
 	}
 
-	log.Warnf(`pgvacman: updating storage parameters for database "%s"`, conn.CurrentDB())
+	log.Infof(`pgvacman: updating storage parameters for database "%s"`, conn.CurrentDB())
 
 	// retrieve all the matching tables
 	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)
@@ -477,7 +477,7 @@ func main() {
 
 	// in display-matches mode, we output the matches here and then exit
 	if *opt_display_matches {
-		log.SetLevel(log.InfoLevel)
+		log.SetLevel(log.DebugLevel)
 		MatchDisplay(tablematches)
 		os.Exit(0)
 	}
