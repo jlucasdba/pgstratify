@@ -332,6 +332,7 @@ func GetoptCallback(opt getopt.Option) bool {
 func main() {
 	// set custom formatter for logging
 	log.SetFormatter(new(PlainFormatter))
+	log.SetOutput(os.Stdout)
 	log.SetLevel(log.WarnLevel)
 
 	var connectoptions ConnectOptions
