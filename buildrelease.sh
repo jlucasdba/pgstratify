@@ -13,7 +13,10 @@ if [[ ! -z $TARGETOS ]]; then
 	export GOOS=${TARGETOS}
 fi
 TMPDIR=$(mktemp -d)
-VERSION=$(./pgstratify --version | awk '{ print $2 }')
+VERSION=$(git tag -l --points-at HEAD | sed 's/v//')
+if [[ -z $VERSION ]]; then
+	VERSION="git$(git log -1 --pretty=reference | awk '{print $1}')"
+fi
 RELNAME="pgstratify-${VERSION}-${GOOS}-${GOARCH}"
 RELDIR="${TMPDIR}/${RELNAME}"
 mkdir ${RELDIR}
