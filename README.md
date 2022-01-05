@@ -1,5 +1,7 @@
 # pgstratify
 
+*Ogres are like onions... Onions have layers. Ogres have layers. --Shrek*
+
 Pgstratify is a storage parameter manager for PostgreSQL. Specifically its intended target is managing the autovacuum-related storage parameters of large tables as they grow. Should work on at least Postgres 9.6+. Earlier releases may work, but haven't been evaluated.
 
 ## Why Do I Need This?
