@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Copyright (c) 2022 James Lucas
+
 # define these to cross-build for another arch/os
 #TARGETARCH=
 #TARGETOS=
