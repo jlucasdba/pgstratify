@@ -21,7 +21,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const Version string = "0.0.1"
+const Version string = "0.0.2"
 
 // Define custom log formatter with very minimal output.
 // We're only really using log levels for verbosity - we
