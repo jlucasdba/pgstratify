@@ -17,7 +17,7 @@ const TableParametersTempTabPK string = `alter table pg_temp.tableparameters add
 const RulesetsSubTempTab string = `create temporary table rulesets_sub as
 with rulesetsjsonin as (select $1::jsonb as rulesetsjsonin),
 rulesets_sub1 as (select key as ruleset, value from jsonb_each((select rulesetsjsonin from rulesetsjsonin)))
-select ruleset, row_number() over (partition by ruleset) as rulenum, minrows, settingsjson from (select ruleset, (value->>'minrows')::bigint as minrows, value->'settings' as settingsjson from (select ruleset, jsonb_array_elements(value) as value from rulesets_sub1) sub_a) sub_b`
+select ruleset, row_number() over (partition by ruleset order by minrows asc) as rulenum, minrows, settingsjson from (select ruleset, (value->>'minrows')::bigint as minrows, value->'settings' as settingsjson from (select ruleset, jsonb_array_elements(value) as value from rulesets_sub1) sub_a) sub_b`
 
 const RulesetsTempTab string = `create temporary table rulesets as
 select ruleset, rulenum, minrows from pg_temp.rulesets_sub`
