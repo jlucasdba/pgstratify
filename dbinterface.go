@@ -107,7 +107,7 @@ func (i *DBInterface) CurrentDB() string {
 }
 
 // given config matchgroups and rulesets, get all the matching tables in need of parameter update from the database
-func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetconfig map[string]ConfigRuleset) ([]TableMatch, error) {
+func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetconfig map[string]ConfigRuleset, displaymode bool) ([]TableMatch, error) {
 	// define some structs for building json
 	type Rule struct {
 		Minrows  uint64             `json:"minrows"`
@@ -247,7 +247,13 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		return nil, err
 	}
 
-	r, _:= tx.Query(bgctx, queries.RuleMatchQuery)
+	var query string
+	if displaymode {
+		query = queries.RuleMatchDisplayModeQuery
+	} else {
+		query = queries.RuleMatchQuery
+	}
+	r, _ := tx.Query(bgctx, query)
 	for r.Next() {
 		var reloid int
 		var relkind rune

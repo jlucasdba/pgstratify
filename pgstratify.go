@@ -539,7 +539,7 @@ func main() {
 	log.Infof(`pgstratify: updating storage parameters for database "%s"`, conn.CurrentDB())
 
 	// retrieve all the matching tables
-	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets)
+	tablematches, err := conn.GetTableMatches(x.Matchgroups, x.Rulesets, *opt_display_matches)
 	if err != nil {
 		log.Fatal(err)
 	}
