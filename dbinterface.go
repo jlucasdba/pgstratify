@@ -92,16 +92,16 @@ func (i *DBInterface) Close() {
 func (i *DBInterface) CurrentDB() string {
 	var dbname string
 
-	r, err := i.conn.Query(bgctx, "select current_database()")
-	if err != nil {
-		log.Fatal(err)
-	}
+	r, _ := i.conn.Query(bgctx, "select current_database()")
 	for r.Next() {
 		err := r.Scan(&dbname)
 		if err != nil {
 			r.Close()
 			log.Fatal(err)
 		}
+	}
+	if r.Err() != nil {
+		log.Fatal(r.Err())
 	}
 	return dbname
 }
@@ -247,11 +247,7 @@ func (i *DBInterface) GetTableMatches(matchconfig []ConfigMatchgroup, rulesetcon
 		return nil, err
 	}
 
-	r, err := tx.Query(bgctx, queries.RuleMatchQuery)
-	if err != nil {
-		return nil, err
-	}
-
+	r, _:= tx.Query(bgctx, queries.RuleMatchQuery)
 	for r.Next() {
 		var reloid int
 		var relkind rune
