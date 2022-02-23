@@ -323,7 +323,7 @@ Usage:
   %s [OPTION] ... [RULEFILE]
 
 Options:
-      --display-matches           take no action, and display what tables matched each matchgroup
+      --display-matches           take no action, and display tables covered by each matchgroup
   -n, --dry-run                   output what would be done without making changes (implies -v)
   -j, --jobs=NUM                  use this many concurrent connections to set storage parameters
       --lock-timeout=NUM          per-table wait timeout in seconds (must be greater than 0, no effect in skip-locked mode)

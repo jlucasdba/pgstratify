@@ -64,7 +64,7 @@ The simplest and most obvious strategy is to use `autovacuum_vacuum_scale_factor
 ### Options:
 `--display-matches`
 
-Take no action, and display what tables matched each matchgroup. Useful for debugging configuration.
+Take no action, and display tables covered by each matchgroup. Useful for debugging configuration. Note that this includes all tables that matched, even those with no pending setting changes.
 
 `-n, --dry-run`
 
