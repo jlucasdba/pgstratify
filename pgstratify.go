@@ -121,6 +121,7 @@ type TableMatch struct {
 	Reltuples      int
 	MatchgroupNum  int
 	Matchgroup     *ConfigMatchgroup
+	Minrows        *int //nil if no match, which can happen in display mode
 	Parameters     map[string]TableMatchParameter
 }
 
@@ -166,7 +167,11 @@ func MatchDisplay(tms []TableMatch) {
 			log.Debugf(`Matchgroup %d (Ruleset: %s) - Schema: "%s", Table: "%s", Owner: "%s", CaseSensitive: %c`, tms[val].MatchgroupNum, tms[val].Matchgroup.Ruleset, tms[val].Matchgroup.Schema, tms[val].Matchgroup.Table, tms[val].Matchgroup.Owner, csmap[tms[val].Matchgroup.CaseSensitive])
 			lastgroup = tms[val].MatchgroupNum
 		}
-		log.Debugf(`  %-6s %-40s %-16s %11d rows`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
+		if tms[val].Minrows != nil {
+			log.Debugf(`  %-6s %-40s %-16s %11d rows (>= minrows %d)`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples, *tms[val].Minrows)
+		} else {
+			log.Debugf(`  %-6s %-40s %-16s %11d rows (no matching minrows)`, objtype[tms[val].Relkind], tms[val].QuotedFullName, tms[val].Owner, tms[val].Reltuples)
+		}
 	}
 }
 
